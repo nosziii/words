@@ -23,8 +23,12 @@
           <input type="checkbox" id="hardOnly" />
           csak nehéz szavak
         </label>
+        <label class="toggle-wrap">
+          <input type="checkbox" id="dueOnly" />
+          csak esedékes (SRS)
+        </label>
         <button id="reloadBtn" class="secondary">CSV újratöltés</button>
-        <button id="resetStatsBtn" class="ghost">Statisztika törlés</button>
+        <button id="resetStatsBtn" class="ghost">Progress törlés</button>
       </div>
     </header>
 
@@ -32,6 +36,19 @@
       <p id="statusText">Betöltés...</p>
       <p id="countText"></p>
       <p id="statsText"></p>
+      <div class="row">
+        <input type="file" id="csvFileInput" accept=".csv,text/csv" />
+        <button id="uploadCsvBtn">CSV feltöltés DB-be</button>
+      </div>
+      <div class="row goals-row">
+        <input type="number" id="goalNew" min="1" placeholder="Napi új szó cél" />
+        <input type="number" id="goalReview" min="1" placeholder="Napi ismétlés cél" />
+        <input type="number" id="hardMinWrong" min="1" placeholder="Nehéz: min hiba" />
+        <input type="number" id="hardMaxAcc" min="1" max="100" placeholder="Nehéz: max pontosság %" />
+        <button id="saveGoalsBtn" class="secondary">Célok mentése</button>
+      </div>
+      <div id="trendText"></div>
+      <div id="mistakesBox" class="mistakes-box"></div>
     </section>
 
     <nav class="mode-tabs">

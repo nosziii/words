@@ -1,8 +1,16 @@
-FROM nginx:1.27-alpine
+FROM node:22-alpine
 
-COPY index.html /usr/share/nginx/html/index.html
-COPY app.js /usr/share/nginx/html/app.js
-COPY style.css /usr/share/nginx/html/style.css
-COPY wordds.csv /usr/share/nginx/html/wordds.csv
+WORKDIR /app
 
-EXPOSE 80
+COPY package.json /app/package.json
+RUN npm install --omit=dev
+
+COPY server.js /app/server.js
+COPY index.html /app/index.html
+COPY app.js /app/app.js
+COPY style.css /app/style.css
+COPY wordds.csv /app/wordds.csv
+
+EXPOSE 3000
+
+CMD ["npm", "start"]
