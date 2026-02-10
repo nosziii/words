@@ -1,0 +1,13 @@
+services:
+  angolwords:
+    build: .
+    container_name: angolwords-app
+    restart: unless-stopped
+    expose:
+      - "80"
+    networks:
+      - my-shared-network
+
+networks:
+  my-shared-network:
+    external: true

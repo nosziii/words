@@ -1,0 +1,100 @@
+Requirement;Követelmény
+Deployment;Telepítés/Élesítés
+Environment;Környezet (pl. dev, test, prod)
+Dependency;Függőség
+Vulnerability;Sebezhetőség
+Scalability;Skálázhatóság
+Implementation;Megvalósítás/Bevezetés
+Maintenance;Karbantartás
+Performance;Teljesítmény
+Refactor;Kódfelújítás/Refaktorálás
+Authentication;Hitelesítés
+Authorization;Jogosultságkezelés
+Concurrency;Párhuzamosság
+Efficiency;Hatékonyság
+Integration;Integráció
+Architecture;Architektúra
+Repository;Tároló/Repo
+Standard;Szabvány
+Component;Komponens
+Documentation;Dokumentáció
+Clarify;Tisztázni (valamit)
+Status report;Állapotjelentés
+Blocker;Akadályozó tényező
+Deadline;Határidő
+Progress;Haladás
+On track;Ütemterv szerint halad
+Feedback;Visszajelzés
+Suggestion;Javaslat
+Opinion;Vélemény
+Agree / Disagree;Egyetérteni / Nem egyetérteni
+Collaborate;Együttműködni
+Estimate;Becsülni (időt/erőforrást)
+Issue;Probléma/Ügy
+Solution;Megoldás
+However;Viszont/Azonban
+Therefore;Ezért/Ebből kifolyólag
+Although;Habár
+In addition;Ráadásul
+Instead of;Valami helyett
+According to;Valami szerint
+Regarding;Valamivel kapcsolatban
+Actually;Tulajdonképpen/Valájában
+Especially;Különösen
+Probably;Valószínűleg
+Necessary;Szükséges
+Significant;Jelentős
+Flexible;Rugalmas
+Basically;Alapvetően
+Briefly;Röviden
+Detailed;Részletes
+Facing an issue;Problémával szembesülni
+Blocked by;Akadályoztatva lenni valami által
+Encountered a problem;Problémába ütköztünk
+Clarify requirements;Követelmények tisztázása
+Catch that;Megérteni/felfogni (amit mondtak)
+Possible solution;Lehetséges megoldás
+Agree completely;Teljesen egyetérteni
+Good point;Jó észrevétel
+See your point;Értem, mire gondolsz
+User interface;Felhasználói felület (UI)
+Security vulnerability;Biztonsági sebezhetőség
+Configuration file;Konfigurációs fájl
+Access token;Hozzáférési token
+Software-based;Szoftveralapú
+Version control;Verziókezelés
+Local machine;Helyi gép
+Development environment;Fejlesztői környezet
+Production environment;Éles környezet
+Unit test;Egységteszt
+Bug report;Hibajelentés
+Steps to reproduce;Lépések a hiba előidézéséhez
+Expected result;Elvárt eredmény
+Actual result;Tényleges eredmény
+Screenshot;Képernyőkép
+Follow up;Utánkövetés/utánakérdezés
+Review code;Kód felülvizsgálata
+Senior developer;Szenior fejlesztő
+Critical bug;Kritikus hiba
+System design;Rendszertervezés
+Database query;Adatbázis-lekérdezés
+Migrating services;Szolgáltatások migrálása
+Third-party API;Külső (harmadik féltől származó) API
+Payment module;Fizetési modul
+Automated build;Automatizált build
+Search function;Keresési funkció
+User authentication;Felhasználói hitelesítés
+User authorization;Felhasználói jogosultságkezelés
+Source code;Forráskód
+Clean code;Tiszta kód
+Well-documented;Jól dokumentált
+Feature branch;Funkció-ág (verziókezelőben)
+Merge branch;Ágak egyesítése
+Pull request;Pull request (kódmódosítási kérelem)
+Refactor component;Komponens refaktorálása
+Readable code;Olvasható kód
+Scheduled release;Ütemezett kiadás
+Security update;Biztonsági frissítés
+Latest version;Legújabb verzió
+User-friendly;Felhasználóbarát
+Briefly summarize;Röviden összefoglalni

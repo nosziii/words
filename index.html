@@ -1,0 +1,52 @@
+﻿<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Angol-Magyar Szótanuló</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="bg"></div>
+  <main class="app">
+    <header class="topbar">
+      <h1>Angol-Magyar Szótanuló</h1>
+      <div class="controls">
+        <label class="direction-wrap">
+          Fordítás iránya
+          <select id="direction">
+            <option value="en-hu">angol -> magyar</option>
+            <option value="hu-en">magyar -> angol</option>
+          </select>
+        </label>
+        <label class="toggle-wrap">
+          <input type="checkbox" id="hardOnly" />
+          csak nehéz szavak
+        </label>
+        <button id="reloadBtn" class="secondary">CSV újratöltés</button>
+        <button id="resetStatsBtn" class="ghost">Statisztika törlés</button>
+      </div>
+    </header>
+
+    <section class="status-card">
+      <p id="statusText">Betöltés...</p>
+      <p id="countText"></p>
+      <p id="statsText"></p>
+    </section>
+
+    <nav class="mode-tabs">
+      <button class="tab active" data-mode="flashcards">Szókártyák</button>
+      <button class="tab" data-mode="typing">Gépelős kvíz</button>
+      <button class="tab" data-mode="choice">Feleletválasztós</button>
+      <button class="tab" data-mode="matching">Párosítás</button>
+    </nav>
+
+    <section id="flashcards" class="mode-panel active"></section>
+    <section id="typing" class="mode-panel"></section>
+    <section id="choice" class="mode-panel"></section>
+    <section id="matching" class="mode-panel"></section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
