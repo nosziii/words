@@ -275,6 +275,18 @@ async function resolveSessionUser(req) {
   return rows[0] || null;
 }
 
+function requireRole(role) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: "Authentication required." });
+    }
+    if (req.user.role !== role) {
+      return res.status(403).json({ error: "Forbidden." });
+    }
+    return next();
+  };
+}
+
 app.use("/api", async (req, res, next) => {
   const publicPaths = new Set(["/health", "/auth/login"]);
   if (publicPaths.has(req.path)) return next();
@@ -387,6 +399,83 @@ app.post("/api/auth/logout", async (req, res) => {
       secure: process.env.NODE_ENV === "production"
     });
     return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/auth/change-password", async (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: "currentPassword and newPassword are required." });
+  }
+  if (String(newPassword).length < 8) {
+    return res.status(400).json({ error: "New password must be at least 8 characters." });
+  }
+  try {
+    const userRes = await pool.query(
+      "SELECT id, password_hash FROM users WHERE id = $1 LIMIT 1",
+      [req.user.id]
+    );
+    if (!userRes.rowCount) return res.status(404).json({ error: "User not found." });
+    const ok = await verifyPassword(String(currentPassword), userRes.rows[0].password_hash);
+    if (!ok) return res.status(401).json({ error: "Current password is incorrect." });
+    const passwordHash = await hashPassword(String(newPassword));
+    await pool.query("UPDATE users SET password_hash = $2 WHERE id = $1", [req.user.id, passwordHash]);
+    await pool.query("DELETE FROM user_sessions WHERE user_id = $1", [req.user.id]);
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/admin/users", requireRole("admin"), async (_req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `
+      SELECT id, username, role, created_at
+      FROM users
+      ORDER BY id ASC
+      `
+    );
+    return res.json({ users: rows });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/admin/users", requireRole("admin"), async (req, res) => {
+  const { username, password, role } = req.body || {};
+  const uname = String(username || "").trim();
+  const pwd = String(password || "");
+  const r = String(role || "").trim().toLowerCase();
+  const allowedRoles = new Set(["teacher", "student", "admin"]);
+
+  if (!uname || !pwd || !r) {
+    return res.status(400).json({ error: "username, password and role are required." });
+  }
+  if (!allowedRoles.has(r)) {
+    return res.status(400).json({ error: "Invalid role. Use admin, teacher or student." });
+  }
+  if (pwd.length < 8) {
+    return res.status(400).json({ error: "Password must be at least 8 characters." });
+  }
+
+  try {
+    const existing = await pool.query("SELECT id FROM users WHERE username = $1 LIMIT 1", [uname]);
+    if (existing.rowCount) {
+      return res.status(409).json({ error: "Username already exists." });
+    }
+    const passwordHash = await hashPassword(pwd);
+    const ins = await pool.query(
+      `
+      INSERT INTO users (username, password_hash, role)
+      VALUES ($1, $2, $3)
+      RETURNING id, username, role, created_at
+      `,
+      [uname, passwordHash, r]
+    );
+    return res.json({ ok: true, user: ins.rows[0] });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

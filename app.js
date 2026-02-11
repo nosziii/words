@@ -64,6 +64,15 @@ const loginBtn = document.getElementById("loginBtn");
 const logoutBtn = document.getElementById("logoutBtn");
 const authError = document.getElementById("authError");
 const userPill = document.getElementById("userPill");
+const adminTools = document.getElementById("adminTools");
+const currentPasswordInput = document.getElementById("currentPasswordInput");
+const newPasswordInput = document.getElementById("newPasswordInput");
+const changePasswordBtn = document.getElementById("changePasswordBtn");
+const newUserUsername = document.getElementById("newUserUsername");
+const newUserPassword = document.getElementById("newUserPassword");
+const newUserRole = document.getElementById("newUserRole");
+const createUserBtn = document.getElementById("createUserBtn");
+const adminUsersList = document.getElementById("adminUsersList");
 
 const qualityLabels = [
   "0 - blackout",
@@ -146,6 +155,15 @@ function renderUserPill() {
   userPill.textContent = state.user ? `Belepve: ${state.user.username}` : "Nincs belepve";
 }
 
+function isAdmin() {
+  return state.user && state.user.role === "admin";
+}
+
+function renderAdminToolsVisibility() {
+  if (isAdmin()) adminTools.classList.remove("hidden");
+  else adminTools.classList.add("hidden");
+}
+
 function setTheme(theme) {
   document.body.setAttribute("data-theme", theme);
   localStorage.setItem(THEME_KEY, theme);
@@ -224,11 +242,13 @@ async function checkAuth() {
     const me = await api("/api/auth/me");
     state.user = me.user;
     renderUserPill();
+    renderAdminToolsVisibility();
     showApp();
     return true;
   } catch (_err) {
     state.user = null;
     renderUserPill();
+    renderAdminToolsVisibility();
     showAuthCard("");
     return false;
   }
@@ -266,7 +286,23 @@ async function doLogout() {
   }
   state.user = null;
   renderUserPill();
+  renderAdminToolsVisibility();
   showAuthCard("Kijelentkeztel.");
+}
+
+async function loadAdminUsers() {
+  if (!isAdmin()) {
+    adminUsersList.textContent = "";
+    return;
+  }
+  const data = await api("/api/admin/users");
+  if (!data.users.length) {
+    adminUsersList.textContent = "Nincs user.";
+    return;
+  }
+  adminUsersList.innerHTML = data.users
+    .map((u) => `<div>${u.id}. ${u.username} - <strong>${u.role}</strong></div>`)
+    .join("");
 }
 
 function isDueCard(card) {
@@ -352,6 +388,7 @@ async function loadAll() {
   try {
     await loadWords();
     await refreshMeta();
+    await loadAdminUsers();
     resetAllGames();
     setStatus("Rendszer kesz.");
   } catch (err) {
@@ -924,6 +961,43 @@ loginPassword.addEventListener("keydown", (e) => {
 });
 
 logoutBtn.addEventListener("click", doLogout);
+
+changePasswordBtn.addEventListener("click", async () => {
+  try {
+    await api("/api/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({
+        currentPassword: currentPasswordInput.value || "",
+        newPassword: newPasswordInput.value || ""
+      })
+    });
+    setStatus("Jelszo sikeresen megvaltoztatva. Jelentkezz be ujra.");
+    currentPasswordInput.value = "";
+    newPasswordInput.value = "";
+    await doLogout();
+  } catch (err) {
+    setStatus(err.message, true);
+  }
+});
+
+createUserBtn.addEventListener("click", async () => {
+  try {
+    await api("/api/admin/users", {
+      method: "POST",
+      body: JSON.stringify({
+        username: (newUserUsername.value || "").trim(),
+        password: newUserPassword.value || "",
+        role: newUserRole.value
+      })
+    });
+    setStatus("Uj felhasznalo letrehozva.");
+    newUserUsername.value = "";
+    newUserPassword.value = "";
+    await loadAdminUsers();
+  } catch (err) {
+    setStatus(err.message, true);
+  }
+});
 
 reloadBtn.addEventListener("click", loadAll);
 

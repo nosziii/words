@@ -103,6 +103,25 @@
           <button id="saveGoalsBtn" class="secondary">Mentes</button>
         </div>
       </article>
+      <article id="adminTools" class="toolbox hidden">
+        <h3>Admin</h3>
+        <div class="row">
+          <input id="currentPasswordInput" type="password" placeholder="Jelenlegi jelszo" />
+          <input id="newPasswordInput" type="password" placeholder="Uj jelszo (min 8)" />
+          <button id="changePasswordBtn" class="secondary">Jelszo csere</button>
+        </div>
+        <div class="row">
+          <input id="newUserUsername" type="text" placeholder="Uj usernev" />
+          <input id="newUserPassword" type="password" placeholder="Uj jelszo" />
+          <select id="newUserRole">
+            <option value="student">student</option>
+            <option value="teacher">teacher</option>
+            <option value="admin">admin</option>
+          </select>
+          <button id="createUserBtn">User letrehozas</button>
+        </div>
+        <div id="adminUsersList" class="subline"></div>
+      </article>
     </section>
 
     <nav class="mode-tabs">
