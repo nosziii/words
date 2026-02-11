@@ -78,6 +78,47 @@ h1 { margin: 0; }
 .controls { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
 .direction-wrap { display: grid; gap: 4px; font-size: .9rem; color: var(--muted); }
 .toggle-wrap { display: flex; align-items: center; gap: 8px; font-size: .9rem; color: var(--muted); }
+.user-pill {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--chip);
+  font-size: .85rem;
+}
+
+.hidden { display: none !important; }
+
+.auth-card {
+  margin-top: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px var(--shadow);
+  padding: 16px;
+}
+
+.toolbox-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1.2fr 1.6fr;
+  gap: 10px;
+}
+
+.toolbox {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 8px 24px var(--shadow);
+  padding: 12px;
+}
+
+.toolbox h3 {
+  margin: 0 0 10px;
+  font-size: .9rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
 
 .hud-grid {
   margin-top: 12px;
@@ -128,7 +169,7 @@ h1 { margin: 0; }
   margin-top: 12px;
   padding: 8px;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -208,9 +249,40 @@ input, select {
   background: var(--chip);
 }
 
+.examples-layout {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 12px;
+}
+
+.examples-list {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.examples-editor {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.examples-editor textarea {
+  width: 100%;
+  min-height: 90px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
 @media (max-width: 900px) {
   .hud-grid { grid-template-columns: 1fr 1fr; }
   .mode-tabs { grid-template-columns: 1fr 1fr 1fr; }
+  .toolbox-grid { grid-template-columns: 1fr; }
+  .examples-layout { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 760px) {

@@ -15,6 +15,7 @@
         <p class="subtitle">SRS + jatekositas + napi celok</p>
       </div>
       <div class="controls">
+        <span id="userPill" class="user-pill"></span>
         <label class="direction-wrap">
           Forditas iranya
           <select id="direction">
@@ -22,20 +23,23 @@
             <option value="hu-en">magyar -> angol</option>
           </select>
         </label>
-        <label class="toggle-wrap">
-          <input type="checkbox" id="hardOnly" />
-          csak nehez
-        </label>
-        <label class="toggle-wrap">
-          <input type="checkbox" id="dueOnly" />
-          csak esedekes
-        </label>
         <button id="themeToggleBtn" class="ghost">Dark mode</button>
-        <button id="reloadBtn" class="secondary">Frissites</button>
-        <button id="resetStatsBtn" class="ghost">Reset</button>
+        <button id="logoutBtn" class="ghost">Kijelentkezes</button>
       </div>
     </header>
 
+    <section id="authCard" class="auth-card">
+      <h2>Bejelentkezes</h2>
+      <p class="subline">A tanulo felulet hasznalatahoz jelentkezz be.</p>
+      <div class="row">
+        <input id="loginUsername" type="text" placeholder="Felhasznalonev" />
+        <input id="loginPassword" type="password" placeholder="Jelszo" />
+        <button id="loginBtn">Bejelentkezes</button>
+      </div>
+      <p id="authError" class="feedback bad"></p>
+    </section>
+
+    <section id="appContent">
     <section class="hud-grid">
       <article class="hud-card">
         <h3>Szint</h3>
@@ -62,19 +66,43 @@
     <section class="status-card">
       <p id="statusText">Betoltes...</p>
       <p id="statsText"></p>
-      <div class="row">
-        <input type="file" id="csvFileInput" accept=".csv,text/csv" />
-        <button id="uploadCsvBtn">CSV import</button>
-      </div>
-      <div class="row goals-row">
-        <input type="number" id="goalNew" min="1" placeholder="Napi uj cel" />
-        <input type="number" id="goalReview" min="1" placeholder="Napi ismetles cel" />
-        <input type="number" id="hardMinWrong" min="1" placeholder="Nehez: min hiba" />
-        <input type="number" id="hardMaxAcc" min="1" max="100" placeholder="Nehez: max pontossag %" />
-        <button id="saveGoalsBtn" class="secondary">Mentes</button>
-      </div>
       <div id="trendText" class="subline"></div>
       <div id="mistakesBox" class="mistakes-box"></div>
+    </section>
+
+    <section class="toolbox-grid">
+      <article class="toolbox">
+        <h3>Szurok</h3>
+        <label class="toggle-wrap">
+          <input type="checkbox" id="hardOnly" />
+          csak nehez
+        </label>
+        <label class="toggle-wrap">
+          <input type="checkbox" id="dueOnly" />
+          csak esedekes
+        </label>
+      </article>
+      <article class="toolbox">
+        <h3>Adatkezeles</h3>
+        <div class="row">
+          <button id="reloadBtn" class="secondary">Frissites</button>
+          <button id="resetStatsBtn" class="ghost">Reset</button>
+        </div>
+        <div class="row">
+          <input type="file" id="csvFileInput" accept=".csv,text/csv" />
+          <button id="uploadCsvBtn">CSV import</button>
+        </div>
+      </article>
+      <article class="toolbox">
+        <h3>Celok</h3>
+        <div class="row goals-row">
+          <input type="number" id="goalNew" min="1" placeholder="Napi uj cel" />
+          <input type="number" id="goalReview" min="1" placeholder="Napi ismetles cel" />
+          <input type="number" id="hardMinWrong" min="1" placeholder="Nehez: min hiba" />
+          <input type="number" id="hardMaxAcc" min="1" max="100" placeholder="Nehez: max pontossag %" />
+          <button id="saveGoalsBtn" class="secondary">Mentes</button>
+        </div>
+      </article>
     </section>
 
     <nav class="mode-tabs">
@@ -83,6 +111,7 @@
       <button class="tab" data-mode="choice">Valasztos</button>
       <button class="tab" data-mode="matching">Parositas</button>
       <button class="tab" data-mode="srs">SRS ertekeles</button>
+      <button class="tab" data-mode="examples">Peldamondatok</button>
     </nav>
 
     <section id="flashcards" class="mode-panel active"></section>
@@ -90,6 +119,8 @@
     <section id="choice" class="mode-panel"></section>
     <section id="matching" class="mode-panel"></section>
     <section id="srs" class="mode-panel"></section>
+    <section id="examples" class="mode-panel"></section>
+    </section>
   </main>
 
   <script src="app.js"></script>

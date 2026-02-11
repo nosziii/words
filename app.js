@@ -3,6 +3,7 @@
 const state = {
   cards: [],
   filteredCards: [],
+  user: null,
   direction: "en-hu",
   mode: "flashcards",
   hardOnly: false,
@@ -55,6 +56,14 @@ const goalReviewEl = document.getElementById("goalReview");
 const hardMinWrongEl = document.getElementById("hardMinWrong");
 const hardMaxAccEl = document.getElementById("hardMaxAcc");
 const saveGoalsBtn = document.getElementById("saveGoalsBtn");
+const authCard = document.getElementById("authCard");
+const appContent = document.getElementById("appContent");
+const loginUsername = document.getElementById("loginUsername");
+const loginPassword = document.getElementById("loginPassword");
+const loginBtn = document.getElementById("loginBtn");
+const logoutBtn = document.getElementById("logoutBtn");
+const authError = document.getElementById("authError");
+const userPill = document.getElementById("userPill");
 
 const qualityLabels = [
   "0 - blackout",
@@ -94,9 +103,47 @@ function formatBadge(badge) {
   return badge.replace(/-/g, " ");
 }
 
+function buildDefaultExample(card) {
+  const word = state.direction === "en-hu" ? card.en : card.hu;
+  const answer = state.direction === "en-hu" ? card.hu : card.en;
+  const templates = [
+    `I need this term in work: ${word}.`,
+    `Can you explain: ${word}?`,
+    `Today I practiced this word: ${word}.`
+  ];
+  return {
+    sentence: templates[Math.floor(Math.random() * templates.length)],
+    translation: `Forditas: ${answer}`,
+    custom: false
+  };
+}
+
+function getExample(card) {
+  if (card.example_sentence && card.example_sentence.trim()) {
+    return { sentence: card.example_sentence.trim(), translation: "", custom: true };
+  }
+  return buildDefaultExample(card);
+}
+
 function setStatus(msg, isError = false) {
   statusText.textContent = msg;
   statusText.style.color = isError ? "#bd2d46" : "inherit";
+}
+
+function showAuthCard(message = "") {
+  authCard.classList.remove("hidden");
+  appContent.classList.add("hidden");
+  authError.textContent = message;
+}
+
+function showApp() {
+  authCard.classList.add("hidden");
+  appContent.classList.remove("hidden");
+  authError.textContent = "";
+}
+
+function renderUserPill() {
+  userPill.textContent = state.user ? `Belepve: ${state.user.username}` : "Nincs belepve";
 }
 
 function setTheme(theme) {
@@ -158,12 +205,68 @@ async function api(path, options = {}) {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options
   });
+  if (res.status === 401) {
+    state.user = null;
+    renderUserPill();
+    showAuthCard("A munkamenet lejart, jelentkezz be ujra.");
+    throw new Error("AUTH_REQUIRED");
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = data.error || `Request failed: ${res.status}`;
     throw new Error(msg);
   }
   return data;
+}
+
+async function checkAuth() {
+  try {
+    const me = await api("/api/auth/me");
+    state.user = me.user;
+    renderUserPill();
+    showApp();
+    return true;
+  } catch (_err) {
+    state.user = null;
+    renderUserPill();
+    showAuthCard("");
+    return false;
+  }
+}
+
+async function doLogin() {
+  const username = (loginUsername.value || "").trim();
+  const password = loginPassword.value || "";
+  if (!username || !password) {
+    showAuthCard("Add meg a felhasznalonevet es jelszot.");
+    return;
+  }
+  loginBtn.disabled = true;
+  try {
+    await api("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password })
+    });
+    const ok = await checkAuth();
+    if (ok) {
+      await loadAll();
+      loginPassword.value = "";
+    }
+  } catch (err) {
+    showAuthCard(err.message === "AUTH_REQUIRED" ? "Bejelentkezes szukseges." : err.message);
+  } finally {
+    loginBtn.disabled = false;
+  }
+}
+
+async function doLogout() {
+  try {
+    await api("/api/auth/logout", { method: "POST", body: "{}" });
+  } catch (_err) {
+  }
+  state.user = null;
+  renderUserPill();
+  showAuthCard("Kijelentkeztel.");
 }
 
 function isDueCard(card) {
@@ -265,16 +368,11 @@ function speak(text) {
 }
 
 function buildSentence(card) {
-  const word = state.direction === "en-hu" ? card.en : card.hu;
-  const answer = state.direction === "en-hu" ? card.hu : card.en;
-  const templates = [
-    `I need this term in work: ${word}.`,
-    `Can you explain: ${word}?`,
-    `Today I practiced this word: ${word}.`
-  ];
+  const ex = getExample(card);
+  const fallback = `Forditas: ${answerSide(card)}`;
   return {
-    prompt: templates[Math.floor(Math.random() * templates.length)],
-    answer: `Forditas: ${answer}`
+    prompt: ex.sentence,
+    answer: ex.translation || fallback
   };
 }
 
@@ -344,9 +442,9 @@ function renderFlashcards() {
       <button id="forgotBtn" class="secondary">Nehez volt</button>
       <button id="nextBtn" class="ghost">Kovetkezo</button>
     </div>
-    <div class="sentence-box">
-      <strong>Peldamondat:</strong> ${sentence.prompt}
-      <div class="row"><button id="showSentenceAnswer" class="ghost">Forditas mutatasa</button><span id="sentenceAnswer"></span></div>
+    <div class="row">
+      <button id="openExamplesBtn" class="ghost">Peldamondatok tab</button>
+      <span>${sentence.prompt}</span>
     </div>
     <p>${state.flash.index + 1}/${state.flash.order.length}</p>
   `;
@@ -358,8 +456,8 @@ function renderFlashcards() {
 
   document.getElementById("speakBtn").onclick = () => speak(front);
 
-  document.getElementById("showSentenceAnswer").onclick = () => {
-    document.getElementById("sentenceAnswer").textContent = sentence.answer;
+  document.getElementById("openExamplesBtn").onclick = () => {
+    switchMode("examples");
   };
 
   document.getElementById("knownBtn").onclick = async () => {
@@ -689,12 +787,98 @@ function renderSrs() {
   });
 }
 
+function renderExamples() {
+  const root = document.getElementById("examples");
+  if (!state.cards.length) {
+    root.innerHTML = "<p>Nincs elerheto szo.</p>";
+    return;
+  }
+
+  const list = state.filteredCards.length ? state.filteredCards : state.cards;
+  const options = list
+    .slice(0, 400)
+    .map((c) => `<option value="${c.id}">${c.en} = ${c.hu}</option>`)
+    .join("");
+
+  root.innerHTML = `
+    <div class="examples-layout">
+      <div class="examples-list">
+        <h3>Szavak</h3>
+        <select id="examplesWordSelect">${options}</select>
+        <p class="subline">Itt tudsz szoszinten peldamondatot szerkeszteni.</p>
+      </div>
+      <div class="examples-editor">
+        <h3>Peldamondat szerkesztes</h3>
+        <label>Mondat</label>
+        <textarea id="exampleSentenceInput" placeholder="Pl.: The deployment failed because of a missing dependency."></textarea>
+        <div class="row">
+          <button id="saveExampleBtn">Mentes</button>
+          <button id="clearExampleBtn" class="ghost">Torles</button>
+          <button id="speakExampleBtn" class="ghost">Kiejtes</button>
+        </div>
+        <p id="exampleHint" class="subline"></p>
+      </div>
+    </div>
+  `;
+
+  const select = document.getElementById("examplesWordSelect");
+  const sentenceEl = document.getElementById("exampleSentenceInput");
+  const hint = document.getElementById("exampleHint");
+
+  const loadSelection = () => {
+    const id = Number(select.value);
+    const card = state.cards.find((c) => c.id === id);
+    if (!card) return;
+    const ex = getExample(card);
+    sentenceEl.value = ex.sentence || "";
+    hint.textContent = ex.custom
+      ? "Egyedi mondat van mentve ehhez a szohoz."
+      : "Sablon mondat. Mentsd, ha egyedit szeretnel.";
+  };
+
+  select.addEventListener("change", loadSelection);
+
+  document.getElementById("saveExampleBtn").onclick = () => {
+    const id = Number(select.value);
+    const card = state.cards.find((c) => c.id === id);
+    if (!card) return;
+    const payload = sentenceEl.value.trim();
+    api("/api/word-example", {
+      method: "POST",
+      body: JSON.stringify({ wordId: id, exampleSentence: payload })
+    }).then(() => {
+      card.example_sentence = payload;
+      hint.textContent = "Peldamondat mentve a DB-be.";
+    }).catch((err) => setStatus(err.message, true));
+  };
+
+  document.getElementById("clearExampleBtn").onclick = () => {
+    const id = Number(select.value);
+    const card = state.cards.find((c) => c.id === id);
+    if (!card) return;
+    api("/api/word-example", {
+      method: "POST",
+      body: JSON.stringify({ wordId: id, exampleSentence: "" })
+    }).then(() => {
+      card.example_sentence = "";
+      loadSelection();
+      hint.textContent = "Egyedi mondat torolve (visszaallt a sablon).";
+    }).catch((err) => setStatus(err.message, true));
+  };
+
+  document.getElementById("speakExampleBtn").onclick = () => {
+    speak(sentenceEl.value.trim());
+  };
+
+  loadSelection();
+}
 function renderMode() {
   if (state.mode === "flashcards") renderFlashcards();
   if (state.mode === "typing") renderTyping();
   if (state.mode === "choice") renderChoice();
   if (state.mode === "matching") renderMatching();
   if (state.mode === "srs") renderSrs();
+  if (state.mode === "examples") renderExamples();
 }
 
 function resetAllGames() {
@@ -733,6 +917,13 @@ themeToggleBtn.addEventListener("click", () => {
   const current = document.body.getAttribute("data-theme") || "light";
   setTheme(current === "dark" ? "light" : "dark");
 });
+
+loginBtn.addEventListener("click", doLogin);
+loginPassword.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") doLogin();
+});
+
+logoutBtn.addEventListener("click", doLogout);
 
 reloadBtn.addEventListener("click", loadAll);
 
@@ -786,4 +977,17 @@ resetStatsBtn.addEventListener("click", async () => {
 });
 
 initTheme();
-loadAll();
+showAuthCard("");
+renderUserPill();
+checkAuth().then((ok) => {
+  if (ok) loadAll();
+});
+
+
+
+
+
+
+
+
+

@@ -1,100 +1,100 @@
-Requirement;Követelmény
-Deployment;Telepítés/Élesítés
-Environment;Környezet (pl. dev, test, prod)
-Dependency;Függőség
-Vulnerability;Sebezhetőség
-Scalability;Skálázhatóság
-Implementation;Megvalósítás/Bevezetés
-Maintenance;Karbantartás
-Performance;Teljesítmény
-Refactor;Kódfelújítás/Refaktorálás
-Authentication;Hitelesítés
-Authorization;Jogosultságkezelés
-Concurrency;Párhuzamosság
-Efficiency;Hatékonyság
-Integration;Integráció
-Architecture;Architektúra
-Repository;Tároló/Repo
-Standard;Szabvány
-Component;Komponens
-Documentation;Dokumentáció
-Clarify;Tisztázni (valamit)
-Status report;Állapotjelentés
-Blocker;Akadályozó tényező
-Deadline;Határidő
-Progress;Haladás
-On track;Ütemterv szerint halad
-Feedback;Visszajelzés
-Suggestion;Javaslat
-Opinion;Vélemény
-Agree / Disagree;Egyetérteni / Nem egyetérteni
-Collaborate;Együttműködni
-Estimate;Becsülni (időt/erőforrást)
-Issue;Probléma/Ügy
-Solution;Megoldás
-However;Viszont/Azonban
-Therefore;Ezért/Ebből kifolyólag
-Although;Habár
-In addition;Ráadásul
-Instead of;Valami helyett
-According to;Valami szerint
-Regarding;Valamivel kapcsolatban
-Actually;Tulajdonképpen/Valájában
-Especially;Különösen
-Probably;Valószínűleg
-Necessary;Szükséges
-Significant;Jelentős
-Flexible;Rugalmas
-Basically;Alapvetően
-Briefly;Röviden
-Detailed;Részletes
-Facing an issue;Problémával szembesülni
-Blocked by;Akadályoztatva lenni valami által
-Encountered a problem;Problémába ütköztünk
-Clarify requirements;Követelmények tisztázása
-Catch that;Megérteni/felfogni (amit mondtak)
-Possible solution;Lehetséges megoldás
-Agree completely;Teljesen egyetérteni
-Good point;Jó észrevétel
-See your point;Értem, mire gondolsz
-User interface;Felhasználói felület (UI)
-Security vulnerability;Biztonsági sebezhetőség
-Configuration file;Konfigurációs fájl
-Access token;Hozzáférési token
-Software-based;Szoftveralapú
-Version control;Verziókezelés
-Local machine;Helyi gép
-Development environment;Fejlesztői környezet
-Production environment;Éles környezet
-Unit test;Egységteszt
-Bug report;Hibajelentés
-Steps to reproduce;Lépések a hiba előidézéséhez
-Expected result;Elvárt eredmény
-Actual result;Tényleges eredmény
-Screenshot;Képernyőkép
-Follow up;Utánkövetés/utánakérdezés
-Review code;Kód felülvizsgálata
-Senior developer;Szenior fejlesztő
-Critical bug;Kritikus hiba
-System design;Rendszertervezés
-Database query;Adatbázis-lekérdezés
-Migrating services;Szolgáltatások migrálása
-Third-party API;Külső (harmadik féltől származó) API
-Payment module;Fizetési modul
-Automated build;Automatizált build
-Search function;Keresési funkció
-User authentication;Felhasználói hitelesítés
-User authorization;Felhasználói jogosultságkezelés
-Source code;Forráskód
-Clean code;Tiszta kód
-Well-documented;Jól dokumentált
-Feature branch;Funkció-ág (verziókezelőben)
-Merge branch;Ágak egyesítése
-Pull request;Pull request (kódmódosítási kérelem)
-Refactor component;Komponens refaktorálása
-Readable code;Olvasható kód
-Scheduled release;Ütemezett kiadás
-Security update;Biztonsági frissítés
-Latest version;Legújabb verzió
-User-friendly;Felhasználóbarát
-Briefly summarize;Röviden összefoglalni
+Requirement;Követelmény;We discussed Requirement in today's meeting.
+Deployment;Telepítés/Élesítés;We discussed Deployment in today's meeting.
+Environment;Környezet (pl. dev, test, prod);We discussed Environment in today's meeting.
+Dependency;Függőség;We discussed Dependency in today's meeting.
+Vulnerability;Sebezhetőség;We discussed Vulnerability in today's meeting.
+Scalability;Skálázhatóság;We discussed Scalability in today's meeting.
+Implementation;Megvalósítás/Bevezetés;We discussed Implementation in today's meeting.
+Maintenance;Karbantartás;We discussed Maintenance in today's meeting.
+Performance;Teljesítmény;We discussed Performance in today's meeting.
+Refactor;Kódfelújítás/Refaktorálás;We discussed Refactor in today's meeting.
+Authentication;Hitelesítés;We discussed Authentication in today's meeting.
+Authorization;Jogosultságkezelés;We discussed Authorization in today's meeting.
+Concurrency;Párhuzamosság;We discussed Concurrency in today's meeting.
+Efficiency;Hatékonyság;We discussed Efficiency in today's meeting.
+Integration;Integráció;We discussed Integration in today's meeting.
+Architecture;Architektúra;We discussed Architecture in today's meeting.
+Repository;Tároló/Repo;We discussed Repository in today's meeting.
+Standard;Szabvány;We discussed Standard in today's meeting.
+Component;Komponens;We discussed Component in today's meeting.
+Documentation;Dokumentáció;We discussed Documentation in today's meeting.
+Clarify;Tisztázni (valamit);We discussed Clarify in today's meeting.
+Status report;Állapotjelentés;We discussed Status report in today's meeting.
+Blocker;Akadályozó tényező;We discussed Blocker in today's meeting.
+Deadline;Határidő;We discussed Deadline in today's meeting.
+Progress;Haladás;We discussed Progress in today's meeting.
+On track;Ütemterv szerint halad;We discussed On track in today's meeting.
+Feedback;Visszajelzés;We discussed Feedback in today's meeting.
+Suggestion;Javaslat;We discussed Suggestion in today's meeting.
+Opinion;Vélemény;We discussed Opinion in today's meeting.
+Agree / Disagree;Egyetérteni / Nem egyetérteni;We discussed Agree / Disagree in today's meeting.
+Collaborate;Együttműködni;We discussed Collaborate in today's meeting.
+Estimate;Becsülni (időt/erőforrást);We discussed Estimate in today's meeting.
+Issue;Probléma/Ügy;We discussed Issue in today's meeting.
+Solution;Megoldás;We discussed Solution in today's meeting.
+However;Viszont/Azonban;We discussed However in today's meeting.
+Therefore;Ezért/Ebből kifolyólag;We discussed Therefore in today's meeting.
+Although;Habár;We discussed Although in today's meeting.
+In addition;Ráadásul;We discussed In addition in today's meeting.
+Instead of;Valami helyett;We discussed Instead of in today's meeting.
+According to;Valami szerint;We discussed According to in today's meeting.
+Regarding;Valamivel kapcsolatban;We discussed Regarding in today's meeting.
+Actually;Tulajdonképpen/Valájában;We discussed Actually in today's meeting.
+Especially;Különösen;We discussed Especially in today's meeting.
+Probably;Valószínűleg;We discussed Probably in today's meeting.
+Necessary;Szükséges;We discussed Necessary in today's meeting.
+Significant;Jelentős;We discussed Significant in today's meeting.
+Flexible;Rugalmas;We discussed Flexible in today's meeting.
+Basically;Alapvetően;We discussed Basically in today's meeting.
+Briefly;Röviden;We discussed Briefly in today's meeting.
+Detailed;Részletes;We discussed Detailed in today's meeting.
+Facing an issue;Problémával szembesülni;We discussed Facing an issue in today's meeting.
+Blocked by;Akadályoztatva lenni valami által;We discussed Blocked by in today's meeting.
+Encountered a problem;Problémába ütköztünk;We discussed Encountered a problem in today's meeting.
+Clarify requirements;Követelmények tisztázása;We discussed Clarify requirements in today's meeting.
+Catch that;Megérteni/felfogni (amit mondtak);We discussed Catch that in today's meeting.
+Possible solution;Lehetséges megoldás;We discussed Possible solution in today's meeting.
+Agree completely;Teljesen egyetérteni;We discussed Agree completely in today's meeting.
+Good point;Jó észrevétel;We discussed Good point in today's meeting.
+See your point;Értem, mire gondolsz;We discussed See your point in today's meeting.
+User interface;Felhasználói felület (UI);We discussed User interface in today's meeting.
+Security vulnerability;Biztonsági sebezhetőség;We discussed Security vulnerability in today's meeting.
+Configuration file;Konfigurációs fájl;We discussed Configuration file in today's meeting.
+Access token;Hozzáférési token;We discussed Access token in today's meeting.
+Software-based;Szoftveralapú;We discussed Software-based in today's meeting.
+Version control;Verziókezelés;We discussed Version control in today's meeting.
+Local machine;Helyi gép;We discussed Local machine in today's meeting.
+Development environment;Fejlesztői környezet;We discussed Development environment in today's meeting.
+Production environment;Éles környezet;We discussed Production environment in today's meeting.
+Unit test;Egységteszt;We discussed Unit test in today's meeting.
+Bug report;Hibajelentés;We discussed Bug report in today's meeting.
+Steps to reproduce;Lépések a hiba előidézéséhez;We discussed Steps to reproduce in today's meeting.
+Expected result;Elvárt eredmény;We discussed Expected result in today's meeting.
+Actual result;Tényleges eredmény;We discussed Actual result in today's meeting.
+Screenshot;Képernyőkép;We discussed Screenshot in today's meeting.
+Follow up;Utánkövetés/utánakérdezés;We discussed Follow up in today's meeting.
+Review code;Kód felülvizsgálata;We discussed Review code in today's meeting.
+Senior developer;Szenior fejlesztő;We discussed Senior developer in today's meeting.
+Critical bug;Kritikus hiba;We discussed Critical bug in today's meeting.
+System design;Rendszertervezés;We discussed System design in today's meeting.
+Database query;Adatbázis-lekérdezés;We discussed Database query in today's meeting.
+Migrating services;Szolgáltatások migrálása;We discussed Migrating services in today's meeting.
+Third-party API;Külső (harmadik féltől származó) API;We discussed Third-party API in today's meeting.
+Payment module;Fizetési modul;We discussed Payment module in today's meeting.
+Automated build;Automatizált build;We discussed Automated build in today's meeting.
+Search function;Keresési funkció;We discussed Search function in today's meeting.
+User authentication;Felhasználói hitelesítés;We discussed User authentication in today's meeting.
+User authorization;Felhasználói jogosultságkezelés;We discussed User authorization in today's meeting.
+Source code;Forráskód;We discussed Source code in today's meeting.
+Clean code;Tiszta kód;We discussed Clean code in today's meeting.
+Well-documented;Jól dokumentált;We discussed Well-documented in today's meeting.
+Feature branch;Funkció-ág (verziókezelőben);We discussed Feature branch in today's meeting.
+Merge branch;Ágak egyesítése;We discussed Merge branch in today's meeting.
+Pull request;Pull request (kódmódosítási kérelem);We discussed Pull request in today's meeting.
+Refactor component;Komponens refaktorálása;We discussed Refactor component in today's meeting.
+Readable code;Olvasható kód;We discussed Readable code in today's meeting.
+Scheduled release;Ütemezett kiadás;We discussed Scheduled release in today's meeting.
+Security update;Biztonsági frissítés;We discussed Security update in today's meeting.
+Latest version;Legújabb verzió;We discussed Latest version in today's meeting.
+User-friendly;Felhasználóbarát;We discussed User-friendly in today's meeting.
+Briefly summarize;Röviden összefoglalni;We discussed Briefly summarize in today's meeting.

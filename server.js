@@ -3,6 +3,8 @@ import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { Pool } from "pg";
+import { randomBytes, scrypt as _scrypt, timingSafeEqual, createHash } from "crypto";
+import { promisify } from "util";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,6 +12,11 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const DATABASE_URL = process.env.DATABASE_URL;
+const DEFAULT_ADMIN_USERNAME = process.env.DEFAULT_ADMIN_USERNAME || "wordsadmin";
+const DEFAULT_ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD || "JDnn26hg";
+const SESSION_COOKIE = "words_session";
+const SESSION_DAYS = 30;
+const scrypt = promisify(_scrypt);
 
 if (!DATABASE_URL) {
   throw new Error("Missing DATABASE_URL environment variable.");
@@ -20,17 +27,52 @@ const pool = new Pool({ connectionString: DATABASE_URL });
 app.use(express.json({ limit: "2mb" }));
 app.use(express.static(__dirname));
 
+function hashSessionToken(token) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+async function hashPassword(password) {
+  const salt = randomBytes(16).toString("base64");
+  const derived = await scrypt(password, salt, 64);
+  return `scrypt$${salt}$${Buffer.from(derived).toString("base64")}`;
+}
+
+async function verifyPassword(password, stored) {
+  if (!stored || typeof stored !== "string") return false;
+  const parts = stored.split("$");
+  if (parts.length !== 3 || parts[0] !== "scrypt") return false;
+  const salt = parts[1];
+  const saved = Buffer.from(parts[2], "base64");
+  const derived = Buffer.from(await scrypt(password, salt, saved.length));
+  if (saved.length !== derived.length) return false;
+  return timingSafeEqual(saved, derived);
+}
+
+function parseCookies(req) {
+  const raw = req.headers.cookie || "";
+  const obj = {};
+  raw.split(";").forEach((part) => {
+    const idx = part.indexOf("=");
+    if (idx <= 0) return;
+    const k = part.slice(0, idx).trim();
+    const v = part.slice(idx + 1).trim();
+    obj[k] = decodeURIComponent(v);
+  });
+  return obj;
+}
+
 function parseCsvText(text) {
   return text
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const i = line.indexOf(";");
-      if (i < 0) return null;
-      const en = line.slice(0, i).trim();
-      const hu = line.slice(i + 1).trim();
-      return en && hu ? { en, hu } : null;
+      const parts = line.split(";");
+      if (parts.length < 2) return null;
+      const en = (parts[0] || "").trim();
+      const hu = (parts[1] || "").trim();
+      const exampleSentence = parts.slice(2).join(";").trim();
+      return en && hu ? { en, hu, exampleSentence } : null;
     })
     .filter(Boolean);
 }
@@ -41,10 +83,12 @@ async function initDb() {
       id BIGSERIAL PRIMARY KEY,
       en TEXT NOT NULL,
       hu TEXT NOT NULL,
+      example_sentence TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE(en, hu)
     );
   `);
+  await pool.query("ALTER TABLE words ADD COLUMN IF NOT EXISTS example_sentence TEXT");
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS word_progress (
@@ -109,6 +153,26 @@ async function initDb() {
     INSERT INTO user_profile (id)
     VALUES (1)
     ON CONFLICT (id) DO NOTHING;
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id BIGSERIAL PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'admin',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 }
 
@@ -180,20 +244,77 @@ async function getSettings(client) {
   return rows[0];
 }
 
-async function upsertWord(client, en, hu) {
+async function ensureDefaultAdmin() {
+  const existing = await pool.query("SELECT id FROM users WHERE username = $1 LIMIT 1", [DEFAULT_ADMIN_USERNAME]);
+  if (existing.rowCount) return;
+  const passwordHash = await hashPassword(DEFAULT_ADMIN_PASSWORD);
+  await pool.query(
+    `
+    INSERT INTO users (username, password_hash, role)
+    VALUES ($1, $2, 'admin')
+    `,
+    [DEFAULT_ADMIN_USERNAME, passwordHash]
+  );
+}
+
+async function resolveSessionUser(req) {
+  const cookies = parseCookies(req);
+  const token = cookies[SESSION_COOKIE];
+  if (!token) return null;
+  const tokenHash = hashSessionToken(token);
+  const { rows } = await pool.query(
+    `
+    SELECT u.id, u.username, u.role
+    FROM user_sessions s
+    JOIN users u ON u.id = s.user_id
+    WHERE s.token_hash = $1 AND s.expires_at > NOW()
+    LIMIT 1
+    `,
+    [tokenHash]
+  );
+  return rows[0] || null;
+}
+
+app.use("/api", async (req, res, next) => {
+  const publicPaths = new Set(["/health", "/auth/login"]);
+  if (publicPaths.has(req.path)) return next();
+  try {
+    const user = await resolveSessionUser(req);
+    if (!user) {
+      return res.status(401).json({ error: "Authentication required." });
+    }
+    req.user = user;
+    return next();
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+async function upsertWord(client, en, hu, exampleSentence = "") {
   const ins = await client.query(
     `
-      INSERT INTO words (en, hu)
-      VALUES ($1, $2)
+      INSERT INTO words (en, hu, example_sentence)
+      VALUES ($1, $2, NULLIF($3, ''))
       ON CONFLICT (en, hu) DO NOTHING
       RETURNING id
     `,
-    [en, hu]
+    [en, hu, exampleSentence]
   );
 
   if (ins.rowCount > 0) {
     await client.query("INSERT INTO word_progress (word_id) VALUES ($1) ON CONFLICT (word_id) DO NOTHING", [ins.rows[0].id]);
     return 1;
+  }
+
+  if (exampleSentence && exampleSentence.trim()) {
+    await client.query(
+      `
+      UPDATE words
+      SET example_sentence = NULLIF($3, '')
+      WHERE en = $1 AND hu = $2
+      `,
+      [en, hu, exampleSentence.trim()]
+    );
   }
 
   return 0;
@@ -205,6 +326,69 @@ app.get("/api/health", async (_req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post("/api/auth/login", async (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) {
+    return res.status(400).json({ error: "username and password required." });
+  }
+  try {
+    const userRes = await pool.query(
+      "SELECT id, username, role, password_hash FROM users WHERE username = $1 LIMIT 1",
+      [String(username).trim()]
+    );
+    if (!userRes.rowCount) {
+      return res.status(401).json({ error: "Invalid credentials." });
+    }
+    const user = userRes.rows[0];
+    const ok = await verifyPassword(String(password), user.password_hash);
+    if (!ok) {
+      return res.status(401).json({ error: "Invalid credentials." });
+    }
+
+    const token = randomBytes(32).toString("hex");
+    const tokenHash = hashSessionToken(token);
+    await pool.query(
+      `
+      INSERT INTO user_sessions (user_id, token_hash, expires_at)
+      VALUES ($1, $2, NOW() + ($3 || ' days')::INTERVAL)
+      `,
+      [user.id, tokenHash, String(SESSION_DAYS)]
+    );
+
+    res.cookie(SESSION_COOKIE, token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: SESSION_DAYS * 24 * 60 * 60 * 1000
+    });
+    return res.json({ ok: true, user: { id: user.id, username: user.username, role: user.role } });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/auth/me", async (req, res) => {
+  return res.json({ user: req.user });
+});
+
+app.post("/api/auth/logout", async (req, res) => {
+  try {
+    const cookies = parseCookies(req);
+    const token = cookies[SESSION_COOKIE];
+    if (token) {
+      await pool.query("DELETE FROM user_sessions WHERE token_hash = $1", [hashSessionToken(token)]);
+    }
+    res.clearCookie(SESSION_COOKIE, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production"
+    });
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -224,7 +408,7 @@ app.post("/api/import-csv", async (req, res) => {
     await client.query("BEGIN");
     let inserted = 0;
     for (const row of parsed) {
-      inserted += await upsertWord(client, row.en, row.hu);
+      inserted += await upsertWord(client, row.en, row.hu, row.exampleSentence);
     }
     await client.query("COMMIT");
     return res.json({ inserted, parsed: parsed.length });
@@ -247,7 +431,7 @@ app.post("/api/import-default-csv", async (_req, res) => {
     try {
       await client.query("BEGIN");
       for (const row of parsed) {
-        inserted += await upsertWord(client, row.en, row.hu);
+        inserted += await upsertWord(client, row.en, row.hu, row.exampleSentence);
       }
       await client.query("COMMIT");
       return res.json({ inserted, parsed: parsed.length });
@@ -272,6 +456,7 @@ app.get("/api/words", async (req, res) => {
     const result = await client.query(
       `
       SELECT w.id, w.en, w.hu,
+             w.example_sentence,
              p.attempts, p.correct, p.wrong, p.due_date,
              p.repetitions, p.interval_days, p.ease_factor,
              p.leech_count, p.last_quality, p.lapses
@@ -299,6 +484,33 @@ app.get("/api/words", async (req, res) => {
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
+  }
+});
+
+app.post("/api/word-example", async (req, res) => {
+  const { wordId, exampleSentence } = req.body || {};
+  if (!wordId) {
+    return res.status(400).json({ error: "wordId is required." });
+  }
+
+  try {
+    const result = await pool.query(
+      `
+      UPDATE words
+      SET example_sentence = NULLIF($2, '')
+      WHERE id = $1
+      RETURNING id, example_sentence
+      `,
+      [Number(wordId), typeof exampleSentence === "string" ? exampleSentence.trim() : ""]
+    );
+
+    if (!result.rowCount) {
+      return res.status(404).json({ error: "word not found." });
+    }
+
+    return res.json({ ok: true, word: result.rows[0] });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -595,13 +807,14 @@ app.get("*", (_req, res) => {
 
 initDb()
   .then(async () => {
+    await ensureDefaultAdmin();
     const count = await pool.query("SELECT COUNT(*)::INT AS c FROM words");
     if (Number(count.rows[0].c) === 0) {
       const csvPath = path.join(__dirname, "wordds.csv");
       const csvText = await fs.readFile(csvPath, "utf8");
       const parsed = parseCsvText(csvText);
       for (const row of parsed) {
-        await upsertWord(pool, row.en, row.hu);
+        await upsertWord(pool, row.en, row.hu, row.exampleSentence);
       }
     }
     app.listen(PORT, () => {
@@ -612,3 +825,5 @@ initDb()
     console.error("DB init failed:", err);
     process.exit(1);
   });
+
+
