@@ -1,4 +1,4 @@
-import express from "express";
+﻿import express from "express";
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -57,9 +57,16 @@ async function initDb() {
       ease_factor DOUBLE PRECISION NOT NULL DEFAULT 2.5,
       due_date DATE NOT NULL DEFAULT CURRENT_DATE,
       first_reviewed_at TIMESTAMPTZ,
-      last_reviewed_at TIMESTAMPTZ
+      last_reviewed_at TIMESTAMPTZ,
+      lapses INTEGER NOT NULL DEFAULT 0,
+      leech_count INTEGER NOT NULL DEFAULT 0,
+      last_quality INTEGER
     );
   `);
+
+  await pool.query("ALTER TABLE word_progress ADD COLUMN IF NOT EXISTS lapses INTEGER NOT NULL DEFAULT 0");
+  await pool.query("ALTER TABLE word_progress ADD COLUMN IF NOT EXISTS leech_count INTEGER NOT NULL DEFAULT 0");
+  await pool.query("ALTER TABLE word_progress ADD COLUMN IF NOT EXISTS last_quality INTEGER");
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS app_settings (
@@ -85,13 +92,85 @@ async function initDb() {
       review_count INTEGER NOT NULL DEFAULT 0
     );
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_profile (
+      id SMALLINT PRIMARY KEY DEFAULT 1,
+      xp INTEGER NOT NULL DEFAULT 0,
+      level INTEGER NOT NULL DEFAULT 1,
+      streak INTEGER NOT NULL DEFAULT 0,
+      longest_streak INTEGER NOT NULL DEFAULT 0,
+      last_active_date DATE,
+      badges TEXT[] NOT NULL DEFAULT '{}'
+    );
+  `);
+
+  await pool.query(`
+    INSERT INTO user_profile (id)
+    VALUES (1)
+    ON CONFLICT (id) DO NOTHING;
+  `);
 }
 
 function isHard(progress, settings) {
-  if (!progress || progress.attempts === 0) return false;
-  if (progress.wrong < settings.min_wrong_for_hard) return false;
-  const accuracy = progress.correct > 0 ? (progress.correct / progress.attempts) * 100 : 0;
-  return accuracy <= settings.max_accuracy_for_hard;
+  if (!progress || Number(progress.attempts) === 0) return false;
+  if (Number(progress.wrong) < Number(settings.min_wrong_for_hard)) return false;
+  const accuracy = Number(progress.correct) > 0 ? (Number(progress.correct) / Number(progress.attempts)) * 100 : 0;
+  return accuracy <= Number(settings.max_accuracy_for_hard);
+}
+
+function qualityToSrsState(prev, quality) {
+  const p = {
+    repetitions: Number(prev.repetitions || 0),
+    intervalDays: Number(prev.interval_days || 0),
+    ease: Number(prev.ease_factor || 2.5),
+    lapses: Number(prev.lapses || 0)
+  };
+
+  if (quality < 3) {
+    p.repetitions = 0;
+    p.intervalDays = 1;
+    p.ease = Math.max(1.3, p.ease - 0.2);
+    p.lapses += 1;
+  } else {
+    p.repetitions += 1;
+    if (p.repetitions === 1) p.intervalDays = 1;
+    else if (p.repetitions === 2) p.intervalDays = 3;
+    else {
+      const qualityBoost = 1 + (quality - 3) * 0.15;
+      p.intervalDays = Math.max(1, Math.round(p.intervalDays * p.ease * qualityBoost));
+    }
+
+    const efDelta = 0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02);
+    p.ease = Math.max(1.3, p.ease + efDelta);
+  }
+
+  return p;
+}
+
+function xpFromQuality(quality) {
+  if (quality >= 5) return 16;
+  if (quality === 4) return 12;
+  if (quality === 3) return 8;
+  if (quality === 2) return 4;
+  return 1;
+}
+
+function levelFromXp(xp) {
+  return Math.max(1, Math.floor(Math.sqrt(xp / 60)) + 1);
+}
+
+function mergeBadges(currentBadges, metrics) {
+  const set = new Set(currentBadges || []);
+  if (metrics.totalAttempts >= 1) set.add("first-review");
+  if (metrics.totalAttempts >= 100) set.add("100-reviews");
+  if (metrics.totalCorrect >= 250) set.add("250-correct");
+  if (metrics.streak >= 3) set.add("streak-3");
+  if (metrics.streak >= 7) set.add("streak-7");
+  if (metrics.streak >= 30) set.add("streak-30");
+  if (metrics.xp >= 500) set.add("xp-500");
+  if (metrics.xp >= 2000) set.add("xp-2000");
+  return Array.from(set);
 }
 
 async function getSettings(client) {
@@ -99,6 +178,25 @@ async function getSettings(client) {
     "SELECT daily_goal_new, daily_goal_reviews, min_wrong_for_hard, max_accuracy_for_hard FROM app_settings WHERE id = 1"
   );
   return rows[0];
+}
+
+async function upsertWord(client, en, hu) {
+  const ins = await client.query(
+    `
+      INSERT INTO words (en, hu)
+      VALUES ($1, $2)
+      ON CONFLICT (en, hu) DO NOTHING
+      RETURNING id
+    `,
+    [en, hu]
+  );
+
+  if (ins.rowCount > 0) {
+    await client.query("INSERT INTO word_progress (word_id) VALUES ($1) ON CONFLICT (word_id) DO NOTHING", [ins.rows[0].id]);
+    return 1;
+  }
+
+  return 0;
 }
 
 app.get("/api/health", async (_req, res) => {
@@ -126,27 +224,7 @@ app.post("/api/import-csv", async (req, res) => {
     await client.query("BEGIN");
     let inserted = 0;
     for (const row of parsed) {
-      const ins = await client.query(
-        `
-        INSERT INTO words (en, hu)
-        VALUES ($1, $2)
-        ON CONFLICT (en, hu) DO NOTHING
-        RETURNING id
-        `,
-        [row.en, row.hu]
-      );
-
-      if (ins.rowCount > 0) {
-        inserted += 1;
-        await client.query(
-          `
-          INSERT INTO word_progress (word_id)
-          VALUES ($1)
-          ON CONFLICT (word_id) DO NOTHING
-          `,
-          [ins.rows[0].id]
-        );
-      }
+      inserted += await upsertWord(client, row.en, row.hu);
     }
     await client.query("COMMIT");
     return res.json({ inserted, parsed: parsed.length });
@@ -165,25 +243,11 @@ app.post("/api/import-default-csv", async (_req, res) => {
     const parsed = parseCsvText(csvText);
     const client = await pool.connect();
     let inserted = 0;
+
     try {
       await client.query("BEGIN");
       for (const row of parsed) {
-        const ins = await client.query(
-          `
-          INSERT INTO words (en, hu)
-          VALUES ($1, $2)
-          ON CONFLICT (en, hu) DO NOTHING
-          RETURNING id
-          `,
-          [row.en, row.hu]
-        );
-        if (ins.rowCount > 0) {
-          inserted += 1;
-          await client.query(
-            "INSERT INTO word_progress (word_id) VALUES ($1) ON CONFLICT (word_id) DO NOTHING",
-            [ins.rows[0].id]
-          );
-        }
+        inserted += await upsertWord(client, row.en, row.hu);
       }
       await client.query("COMMIT");
       return res.json({ inserted, parsed: parsed.length });
@@ -199,45 +263,38 @@ app.post("/api/import-default-csv", async (_req, res) => {
 });
 
 app.get("/api/words", async (req, res) => {
-  const mode = req.query.mode || "all";
-  const limit = Math.max(1, Math.min(200, Number(req.query.limit || 50)));
+  const mode = String(req.query.mode || "all");
+  const limit = Math.max(1, Math.min(500, Number(req.query.limit || 100)));
   const client = await pool.connect();
   try {
     const settings = await getSettings(client);
-    let rows;
+
+    const result = await client.query(
+      `
+      SELECT w.id, w.en, w.hu,
+             p.attempts, p.correct, p.wrong, p.due_date,
+             p.repetitions, p.interval_days, p.ease_factor,
+             p.leech_count, p.last_quality, p.lapses
+      FROM words w
+      JOIN word_progress p ON p.word_id = w.id
+      ORDER BY p.wrong DESC, w.id ASC
+      LIMIT $1
+      `,
+      [limit]
+    );
+
+    let words = result.rows;
     if (mode === "due") {
-      const result = await client.query(
-        `
-        SELECT w.id, w.en, w.hu, p.attempts, p.correct, p.wrong, p.due_date
-        FROM words w
-        JOIN word_progress p ON p.word_id = w.id
-        WHERE p.due_date <= CURRENT_DATE
-        ORDER BY p.due_date ASC, p.wrong DESC, w.id ASC
-        LIMIT $1
-        `,
-        [limit]
-      );
-      rows = result.rows;
-    } else {
-      const result = await client.query(
-        `
-        SELECT w.id, w.en, w.hu, p.attempts, p.correct, p.wrong, p.due_date
-        FROM words w
-        JOIN word_progress p ON p.word_id = w.id
-        ORDER BY p.wrong DESC, w.id ASC
-        LIMIT $1
-        `,
-        [limit]
-      );
-      rows = result.rows;
+      words = words.filter((w) => new Date(w.due_date) <= new Date());
+    }
+    if (mode === "hard") {
+      words = words.filter((w) => isHard(w, settings));
+    }
+    if (mode === "leech") {
+      words = words.filter((w) => Number(w.leech_count || 0) > 0 || Number(w.lapses || 0) >= 4);
     }
 
-    const shaped = rows.filter((r) => {
-      if (mode !== "hard") return true;
-      return isHard(r, settings);
-    });
-
-    res.json({ words: shaped });
+    res.json({ words });
   } catch (err) {
     res.status(500).json({ error: err.message });
   } finally {
@@ -246,17 +303,21 @@ app.get("/api/words", async (req, res) => {
 });
 
 app.post("/api/review", async (req, res) => {
-  const { wordId, correct } = req.body || {};
-  if (!wordId || typeof correct !== "boolean") {
-    return res.status(400).json({ error: "wordId and correct are required." });
+  const { wordId, quality, correct } = req.body || {};
+  const hasQuality = Number.isInteger(quality);
+  const q = hasQuality ? Number(quality) : correct === true ? 4 : 1;
+
+  if (!wordId || q < 0 || q > 5) {
+    return res.status(400).json({ error: "wordId and quality(0-5) are required." });
   }
 
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+
     const progressRes = await client.query(
       `
-      SELECT attempts, correct, wrong, repetitions, interval_days, ease_factor, due_date, first_reviewed_at
+      SELECT attempts, correct, wrong, repetitions, interval_days, ease_factor, first_reviewed_at, lapses, leech_count
       FROM word_progress
       WHERE word_id = $1
       FOR UPDATE
@@ -270,27 +331,11 @@ app.post("/api/review", async (req, res) => {
     }
 
     const p = progressRes.rows[0];
-    let repetitions = Number(p.repetitions || 0);
-    let intervalDays = Number(p.interval_days || 0);
-    let ease = Number(p.ease_factor || 2.5);
-    let attempts = Number(p.attempts || 0) + 1;
-    let corr = Number(p.correct || 0);
-    let wrong = Number(p.wrong || 0);
-
-    if (correct) {
-      corr += 1;
-      if (repetitions === 0) intervalDays = 1;
-      else if (repetitions === 1) intervalDays = 3;
-      else intervalDays = Math.max(1, Math.round(intervalDays * ease));
-      repetitions += 1;
-      ease = Math.max(1.3, ease + 0.05);
-    } else {
-      wrong += 1;
-      repetitions = 0;
-      intervalDays = 1;
-      ease = Math.max(1.3, ease - 0.2);
-    }
-
+    const srs = qualityToSrsState(p, q);
+    const attempts = Number(p.attempts || 0) + 1;
+    const corr = Number(p.correct || 0) + (q >= 3 ? 1 : 0);
+    const wrong = Number(p.wrong || 0) + (q < 3 ? 1 : 0);
+    const leechCount = Number(p.leech_count || 0) + (q < 2 && Number(p.lapses || 0) + 1 >= 4 ? 1 : 0);
     const firstReviewedAt = p.first_reviewed_at || new Date().toISOString();
 
     await client.query(
@@ -305,10 +350,26 @@ app.post("/api/review", async (req, res) => {
         ease_factor = $7,
         due_date = CURRENT_DATE + $8::INT,
         first_reviewed_at = $9,
-        last_reviewed_at = NOW()
+        last_reviewed_at = NOW(),
+        lapses = $10,
+        leech_count = $11,
+        last_quality = $12
       WHERE word_id = $1
       `,
-      [wordId, attempts, corr, wrong, repetitions, intervalDays, ease, intervalDays, firstReviewedAt]
+      [
+        wordId,
+        attempts,
+        corr,
+        wrong,
+        srs.repetitions,
+        srs.intervalDays,
+        srs.ease,
+        srs.intervalDays,
+        firstReviewedAt,
+        srs.lapses,
+        leechCount,
+        q
+      ]
     );
 
     await client.query(
@@ -321,17 +382,61 @@ app.post("/api/review", async (req, res) => {
     );
 
     if (!p.first_reviewed_at) {
-      await client.query(
-        `
-        UPDATE daily_progress
-        SET new_count = new_count + 1
-        WHERE day = CURRENT_DATE
-        `
-      );
+      await client.query("UPDATE daily_progress SET new_count = new_count + 1 WHERE day = CURRENT_DATE");
     }
 
+    const profileRes = await client.query(
+      "SELECT xp, level, streak, longest_streak, last_active_date, badges FROM user_profile WHERE id = 1 FOR UPDATE"
+    );
+    const profile = profileRes.rows[0];
+    const xp = Number(profile.xp || 0) + xpFromQuality(q);
+
+    let streak = Number(profile.streak || 0);
+    const longest = Number(profile.longest_streak || 0);
+
+    if (!profile.last_active_date) {
+      streak = 1;
+    } else {
+      const last = new Date(profile.last_active_date);
+      const now = new Date();
+      const lastYmd = new Date(last.getFullYear(), last.getMonth(), last.getDate());
+      const nowYmd = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const diffDays = Math.round((nowYmd - lastYmd) / 86400000);
+      if (diffDays === 0) {
+      } else if (diffDays === 1) {
+        streak += 1;
+      } else {
+        streak = 1;
+      }
+    }
+
+    const totalRes = await client.query("SELECT COALESCE(SUM(attempts),0)::INT AS attempts, COALESCE(SUM(correct),0)::INT AS correct FROM word_progress");
+    const metrics = {
+      totalAttempts: Number(totalRes.rows[0].attempts || 0),
+      totalCorrect: Number(totalRes.rows[0].correct || 0),
+      streak,
+      xp
+    };
+    const badges = mergeBadges(profile.badges || [], metrics);
+    const level = levelFromXp(xp);
+    const longestStreak = Math.max(longest, streak);
+
+    await client.query(
+      `
+      UPDATE user_profile
+      SET xp = $1,
+          level = $2,
+          streak = $3,
+          longest_streak = $4,
+          last_active_date = CURRENT_DATE,
+          badges = $5
+      WHERE id = 1
+      `,
+      [xp, level, streak, longestStreak, badges]
+    );
+
     await client.query("COMMIT");
-    return res.json({ ok: true });
+    return res.json({ ok: true, quality: q, xpGain: xpFromQuality(q) });
   } catch (err) {
     await client.query("ROLLBACK");
     return res.status(500).json({ error: err.message });
@@ -351,19 +456,14 @@ app.get("/api/dashboard", async (_req, res) => {
         COUNT(*)::INT AS total_words,
         COALESCE(SUM(p.wrong), 0)::INT AS total_wrong,
         COALESCE(SUM(p.correct), 0)::INT AS total_correct,
-        COALESCE(SUM(CASE WHEN p.due_date <= CURRENT_DATE THEN 1 ELSE 0 END), 0)::INT AS due_today
+        COALESCE(SUM(CASE WHEN p.due_date <= CURRENT_DATE THEN 1 ELSE 0 END), 0)::INT AS due_today,
+        COALESCE(SUM(CASE WHEN p.leech_count > 0 THEN 1 ELSE 0 END), 0)::INT AS leech_words
       FROM words w
       JOIN word_progress p ON p.word_id = w.id
       `
     );
 
-    const todayRes = await client.query(
-      `
-      SELECT new_count, review_count
-      FROM daily_progress
-      WHERE day = CURRENT_DATE
-      `
-    );
+    const todayRes = await client.query("SELECT new_count, review_count FROM daily_progress WHERE day = CURRENT_DATE");
 
     const trendRes = await client.query(
       `
@@ -374,21 +474,18 @@ app.get("/api/dashboard", async (_req, res) => {
       `
     );
 
-    const hardRes = await client.query(
-      `
-      SELECT p.attempts, p.correct, p.wrong
-      FROM word_progress p
-      `
-    );
-
+    const hardRes = await client.query("SELECT attempts, correct, wrong FROM word_progress");
     const hardCount = hardRes.rows.filter((r) => isHard(r, settings)).length;
+
+    const profileRes = await client.query("SELECT xp, level, streak, longest_streak, badges FROM user_profile WHERE id = 1");
 
     res.json({
       settings,
       totals: totalsRes.rows[0],
       today: todayRes.rows[0] || { new_count: 0, review_count: 0 },
       hardCount,
-      trend: trendRes.rows.reverse()
+      trend: trendRes.rows.reverse(),
+      profile: profileRes.rows[0]
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -402,11 +499,11 @@ app.get("/api/mistakes", async (req, res) => {
   try {
     const { rows } = await pool.query(
       `
-      SELECT w.id, w.en, w.hu, p.attempts, p.correct, p.wrong
+      SELECT w.id, w.en, w.hu, p.attempts, p.correct, p.wrong, p.leech_count, p.due_date
       FROM words w
       JOIN word_progress p ON p.word_id = w.id
       WHERE p.wrong > 0
-      ORDER BY p.wrong DESC, p.attempts DESC, w.id ASC
+      ORDER BY p.leech_count DESC, p.wrong DESC, p.attempts DESC, w.id ASC
       LIMIT $1
       `,
       [limit]
@@ -429,12 +526,7 @@ app.get("/api/settings", async (_req, res) => {
 });
 
 app.post("/api/settings", async (req, res) => {
-  const {
-    daily_goal_new,
-    daily_goal_reviews,
-    min_wrong_for_hard,
-    max_accuracy_for_hard
-  } = req.body || {};
+  const { daily_goal_new, daily_goal_reviews, min_wrong_for_hard, max_accuracy_for_hard } = req.body || {};
 
   const values = [
     Number(daily_goal_new || 20),
@@ -451,12 +543,11 @@ app.post("/api/settings", async (req, res) => {
     await pool.query(
       `
       UPDATE app_settings
-      SET
-        daily_goal_new = $1,
-        daily_goal_reviews = $2,
-        min_wrong_for_hard = $3,
-        max_accuracy_for_hard = $4,
-        updated_at = NOW()
+      SET daily_goal_new = $1,
+          daily_goal_reviews = $2,
+          min_wrong_for_hard = $3,
+          max_accuracy_for_hard = $4,
+          updated_at = NOW()
       WHERE id = 1
       `,
       values
@@ -471,8 +562,23 @@ app.post("/api/reset-progress", async (_req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await client.query("UPDATE word_progress SET attempts = 0, correct = 0, wrong = 0, repetitions = 0, interval_days = 0, ease_factor = 2.5, due_date = CURRENT_DATE, first_reviewed_at = NULL, last_reviewed_at = NULL");
+    await client.query(`
+      UPDATE word_progress
+      SET attempts = 0,
+          correct = 0,
+          wrong = 0,
+          repetitions = 0,
+          interval_days = 0,
+          ease_factor = 2.5,
+          due_date = CURRENT_DATE,
+          first_reviewed_at = NULL,
+          last_reviewed_at = NULL,
+          lapses = 0,
+          leech_count = 0,
+          last_quality = NULL
+    `);
     await client.query("DELETE FROM daily_progress");
+    await client.query("UPDATE user_profile SET xp = 0, level = 1, streak = 0, longest_streak = 0, last_active_date = NULL, badges = '{}' WHERE id = 1");
     await client.query("COMMIT");
     res.json({ ok: true });
   } catch (err) {
@@ -495,13 +601,7 @@ initDb()
       const csvText = await fs.readFile(csvPath, "utf8");
       const parsed = parseCsvText(csvText);
       for (const row of parsed) {
-        const ins = await pool.query(
-          "INSERT INTO words (en, hu) VALUES ($1, $2) ON CONFLICT (en, hu) DO NOTHING RETURNING id",
-          [row.en, row.hu]
-        );
-        if (ins.rowCount > 0) {
-          await pool.query("INSERT INTO word_progress (word_id) VALUES ($1) ON CONFLICT (word_id) DO NOTHING", [ins.rows[0].id]);
-        }
+        await upsertWord(pool, row.en, row.hu);
       }
     }
     app.listen(PORT, () => {

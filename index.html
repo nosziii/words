@@ -3,17 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Angol-Magyar Szótanuló</title>
+  <title>Angol-Magyar Szotanulo</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="bg"></div>
   <main class="app">
     <header class="topbar">
-      <h1>Angol-Magyar Szótanuló</h1>
+      <div>
+        <h1>Angol-Magyar Szotanulo</h1>
+        <p class="subtitle">SRS + jatekositas + napi celok</p>
+      </div>
       <div class="controls">
         <label class="direction-wrap">
-          Fordítás iránya
+          Forditas iranya
           <select id="direction">
             <option value="en-hu">angol -> magyar</option>
             <option value="hu-en">magyar -> angol</option>
@@ -21,47 +24,72 @@
         </label>
         <label class="toggle-wrap">
           <input type="checkbox" id="hardOnly" />
-          csak nehéz szavak
+          csak nehez
         </label>
         <label class="toggle-wrap">
           <input type="checkbox" id="dueOnly" />
-          csak esedékes (SRS)
+          csak esedekes
         </label>
-        <button id="reloadBtn" class="secondary">CSV újratöltés</button>
-        <button id="resetStatsBtn" class="ghost">Progress törlés</button>
+        <button id="themeToggleBtn" class="ghost">Dark mode</button>
+        <button id="reloadBtn" class="secondary">Frissites</button>
+        <button id="resetStatsBtn" class="ghost">Reset</button>
       </div>
     </header>
 
+    <section class="hud-grid">
+      <article class="hud-card">
+        <h3>Szint</h3>
+        <p id="levelText" class="hud-value">Lv. 1</p>
+        <div class="xp-track"><div id="xpBar" class="xp-fill"></div></div>
+        <p id="xpText" class="hud-small">XP: 0</p>
+      </article>
+      <article class="hud-card">
+        <h3>Streak</h3>
+        <p id="streakText" class="hud-value">0 nap</p>
+        <p id="longestStreakText" class="hud-small">max: 0</p>
+      </article>
+      <article class="hud-card">
+        <h3>Napi cel</h3>
+        <p id="goalText" class="hud-small">-</p>
+        <p id="countText" class="hud-small"></p>
+      </article>
+      <article class="hud-card">
+        <h3>Badge-ek</h3>
+        <div id="badgesBox" class="badge-list"></div>
+      </article>
+    </section>
+
     <section class="status-card">
-      <p id="statusText">Betöltés...</p>
-      <p id="countText"></p>
+      <p id="statusText">Betoltes...</p>
       <p id="statsText"></p>
       <div class="row">
         <input type="file" id="csvFileInput" accept=".csv,text/csv" />
-        <button id="uploadCsvBtn">CSV feltöltés DB-be</button>
+        <button id="uploadCsvBtn">CSV import</button>
       </div>
       <div class="row goals-row">
-        <input type="number" id="goalNew" min="1" placeholder="Napi új szó cél" />
-        <input type="number" id="goalReview" min="1" placeholder="Napi ismétlés cél" />
-        <input type="number" id="hardMinWrong" min="1" placeholder="Nehéz: min hiba" />
-        <input type="number" id="hardMaxAcc" min="1" max="100" placeholder="Nehéz: max pontosság %" />
-        <button id="saveGoalsBtn" class="secondary">Célok mentése</button>
+        <input type="number" id="goalNew" min="1" placeholder="Napi uj cel" />
+        <input type="number" id="goalReview" min="1" placeholder="Napi ismetles cel" />
+        <input type="number" id="hardMinWrong" min="1" placeholder="Nehez: min hiba" />
+        <input type="number" id="hardMaxAcc" min="1" max="100" placeholder="Nehez: max pontossag %" />
+        <button id="saveGoalsBtn" class="secondary">Mentes</button>
       </div>
-      <div id="trendText"></div>
+      <div id="trendText" class="subline"></div>
       <div id="mistakesBox" class="mistakes-box"></div>
     </section>
 
     <nav class="mode-tabs">
-      <button class="tab active" data-mode="flashcards">Szókártyák</button>
-      <button class="tab" data-mode="typing">Gépelős kvíz</button>
-      <button class="tab" data-mode="choice">Feleletválasztós</button>
-      <button class="tab" data-mode="matching">Párosítás</button>
+      <button class="tab active" data-mode="flashcards">Szokartyak</button>
+      <button class="tab" data-mode="typing">Gepelos</button>
+      <button class="tab" data-mode="choice">Valasztos</button>
+      <button class="tab" data-mode="matching">Parositas</button>
+      <button class="tab" data-mode="srs">SRS ertekeles</button>
     </nav>
 
     <section id="flashcards" class="mode-panel active"></section>
     <section id="typing" class="mode-panel"></section>
     <section id="choice" class="mode-panel"></section>
     <section id="matching" class="mode-panel"></section>
+    <section id="srs" class="mode-panel"></section>
   </main>
 
   <script src="app.js"></script>

@@ -1,4 +1,6 @@
-﻿const state = {
+﻿const THEME_KEY = "angolwords_theme";
+
+const state = {
   cards: [],
   filteredCards: [],
   direction: "en-hu",
@@ -11,22 +13,39 @@
     min_wrong_for_hard: 2,
     max_accuracy_for_hard: 70
   },
+  profile: {
+    xp: 0,
+    level: 1,
+    streak: 0,
+    longest_streak: 0,
+    badges: []
+  },
   flash: { order: [], index: 0, revealed: false },
   typing: { order: [], index: 0, score: 0 },
   choice: { order: [], index: 0, score: 0 },
-  matching: { left: [], right: [], map: {}, cardByPrompt: {}, chosenLeft: null, score: 0 }
+  matching: { left: [], right: [], map: {}, cardByPrompt: {}, chosenLeft: null, score: 0 },
+  srs: { order: [], index: 0 }
 };
 
 const tabs = Array.from(document.querySelectorAll(".tab"));
 const panels = Array.from(document.querySelectorAll(".mode-panel"));
 const statusText = document.getElementById("statusText");
-const countText = document.getElementById("countText");
 const statsText = document.getElementById("statsText");
+const countText = document.getElementById("countText");
+const goalText = document.getElementById("goalText");
 const trendText = document.getElementById("trendText");
 const mistakesBox = document.getElementById("mistakesBox");
+const badgesBox = document.getElementById("badgesBox");
+const levelText = document.getElementById("levelText");
+const xpText = document.getElementById("xpText");
+const xpBar = document.getElementById("xpBar");
+const streakText = document.getElementById("streakText");
+const longestStreakText = document.getElementById("longestStreakText");
+
 const directionEl = document.getElementById("direction");
 const hardOnlyEl = document.getElementById("hardOnly");
 const dueOnlyEl = document.getElementById("dueOnly");
+const themeToggleBtn = document.getElementById("themeToggleBtn");
 const reloadBtn = document.getElementById("reloadBtn");
 const resetStatsBtn = document.getElementById("resetStatsBtn");
 const csvFileInput = document.getElementById("csvFileInput");
@@ -37,13 +56,14 @@ const hardMinWrongEl = document.getElementById("hardMinWrong");
 const hardMaxAccEl = document.getElementById("hardMaxAcc");
 const saveGoalsBtn = document.getElementById("saveGoalsBtn");
 
-function normalizeValue(value) {
-  return value.trim().toLocaleLowerCase("hu-HU");
-}
-
-function answerEquals(a, b) {
-  return normalizeValue(a) === normalizeValue(b);
-}
+const qualityLabels = [
+  "0 - blackout",
+  "1 - nagyon nehez",
+  "2 - nehez",
+  "3 - kozepes",
+  "4 - jo",
+  "5 - tokeletes"
+];
 
 function shuffle(arr) {
   const copy = [...arr];
@@ -54,6 +74,14 @@ function shuffle(arr) {
   return copy;
 }
 
+function normalizeValue(value) {
+  return value.trim().toLocaleLowerCase("hu-HU");
+}
+
+function answerEquals(a, b) {
+  return normalizeValue(a) === normalizeValue(b);
+}
+
 function promptSide(card) {
   return state.direction === "en-hu" ? card.en : card.hu;
 }
@@ -62,9 +90,67 @@ function answerSide(card) {
   return state.direction === "en-hu" ? card.hu : card.en;
 }
 
+function formatBadge(badge) {
+  return badge.replace(/-/g, " ");
+}
+
 function setStatus(msg, isError = false) {
   statusText.textContent = msg;
-  statusText.style.color = isError ? "#ab2f2f" : "inherit";
+  statusText.style.color = isError ? "#bd2d46" : "inherit";
+}
+
+function setTheme(theme) {
+  document.body.setAttribute("data-theme", theme);
+  localStorage.setItem(THEME_KEY, theme);
+  themeToggleBtn.textContent = theme === "dark" ? "Light mode" : "Dark mode";
+}
+
+function initTheme() {
+  const stored = localStorage.getItem(THEME_KEY);
+  if (stored === "dark" || stored === "light") {
+    setTheme(stored);
+    return;
+  }
+
+  const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  setTheme(prefersDark ? "dark" : "light");
+}
+
+function renderHud(today, totals) {
+  const p = state.profile;
+  const currentLevelBase = Math.pow(Math.max(0, p.level - 1), 2) * 60;
+  const nextLevelBase = Math.pow(p.level, 2) * 60;
+  const inLevelXp = p.xp - currentLevelBase;
+  const levelSpan = Math.max(1, nextLevelBase - currentLevelBase);
+  const pct = Math.max(0, Math.min(100, Math.round((inLevelXp / levelSpan) * 100)));
+
+  levelText.textContent = `Lv. ${p.level}`;
+  xpText.textContent = `XP: ${p.xp} (${pct}% a kovetkezo szintig)`;
+  xpBar.style.width = `${pct}%`;
+  streakText.textContent = `${p.streak} nap`;
+  longestStreakText.textContent = `max: ${p.longest_streak}`;
+
+  const newPct = state.settings.daily_goal_new > 0
+    ? Math.min(100, Math.round((today.new_count / state.settings.daily_goal_new) * 100))
+    : 0;
+  const reviewPct = state.settings.daily_goal_reviews > 0
+    ? Math.min(100, Math.round((today.review_count / state.settings.daily_goal_reviews) * 100))
+    : 0;
+  goalText.textContent = `uj ${today.new_count}/${state.settings.daily_goal_new} (${newPct}%), ismetles ${today.review_count}/${state.settings.daily_goal_reviews} (${reviewPct}%)`;
+
+  badgesBox.innerHTML = "";
+  if (!p.badges || !p.badges.length) {
+    badgesBox.innerHTML = '<span class="badge-chip">meg nincs badge</span>';
+  } else {
+    p.badges.forEach((b) => {
+      const el = document.createElement("span");
+      el.className = "badge-chip";
+      el.textContent = formatBadge(b);
+      badgesBox.appendChild(el);
+    });
+  }
+
+  statsText.textContent = `Osszes szo: ${totals.total_words}, helyes: ${totals.total_correct}, hibas: ${totals.total_wrong}, esedekes: ${totals.due_today}, leech: ${totals.leech_words}`;
 }
 
 async function api(path, options = {}) {
@@ -110,51 +196,45 @@ function setCount() {
   const total = state.cards.length;
   const hard = state.cards.filter(isHardCard).length;
   const due = state.cards.filter(isDueCard).length;
-  countText.textContent = `Szavak: ${total} | nehez: ${hard} | esedekes: ${due} | aktiv szuro eredmeny: ${state.filteredCards.length}`;
+  countText.textContent = `Szavak: ${total} | nehez: ${hard} | esedekes: ${due} | aktiv: ${state.filteredCards.length}`;
 }
 
-async function loadDashboard() {
-  const data = await api("/api/dashboard");
-  state.settings = data.settings;
+function updateCardLocally(card, quality) {
+  if (!card) return;
+  card.attempts = Number(card.attempts || 0) + 1;
+  if (quality >= 3) card.correct = Number(card.correct || 0) + 1;
+  else card.wrong = Number(card.wrong || 0) + 1;
+  card.last_quality = quality;
+  if (quality < 3) card.due_date = new Date().toISOString().slice(0, 10);
+}
 
-  goalNewEl.value = data.settings.daily_goal_new;
-  goalReviewEl.value = data.settings.daily_goal_reviews;
-  hardMinWrongEl.value = data.settings.min_wrong_for_hard;
-  hardMaxAccEl.value = data.settings.max_accuracy_for_hard;
+async function refreshMeta() {
+  const dashboard = await api("/api/dashboard");
+  state.settings = dashboard.settings;
+  state.profile = dashboard.profile;
 
-  const t = data.totals;
-  const today = data.today;
-  const newPct = data.settings.daily_goal_new > 0
-    ? Math.min(100, Math.round((today.new_count / data.settings.daily_goal_new) * 100))
-    : 0;
-  const revPct = data.settings.daily_goal_reviews > 0
-    ? Math.min(100, Math.round((today.review_count / data.settings.daily_goal_reviews) * 100))
-    : 0;
+  goalNewEl.value = state.settings.daily_goal_new;
+  goalReviewEl.value = state.settings.daily_goal_reviews;
+  hardMinWrongEl.value = state.settings.min_wrong_for_hard;
+  hardMaxAccEl.value = state.settings.max_accuracy_for_hard;
 
-  statsText.textContent = `Dashboard: osszes szo ${t.total_words}, helyes ${t.total_correct}, hibas ${t.total_wrong}, ma esedekes ${t.due_today}, nehez ${data.hardCount}`;
-  trendText.textContent = `Mai cel: uj ${today.new_count}/${data.settings.daily_goal_new} (${newPct}%), ismetles ${today.review_count}/${data.settings.daily_goal_reviews} (${revPct}%).`;
-
-  const trendSimple = data.trend
+  const trendSimple = dashboard.trend
     .map((x) => `${x.day}: uj ${x.new_count}, ismetles ${x.review_count}`)
     .join(" | ");
+  trendText.textContent = trendSimple ? `7 nap trend: ${trendSimple}` : "Nincs trend adat.";
 
-  if (trendSimple) {
-    trendText.textContent += ` 7 nap: ${trendSimple}`;
-  }
-}
+  renderHud(dashboard.today, dashboard.totals);
 
-async function loadMistakes() {
-  const data = await api("/api/mistakes?limit=12");
-  if (!data.mistakes.length) {
+  const mistakes = await api("/api/mistakes?limit=14");
+  if (!mistakes.mistakes.length) {
     mistakesBox.innerHTML = "<strong>Hibafuzet:</strong> meg nincs hibas szo.";
-    return;
+  } else {
+    const rows = mistakes.mistakes.map((m) => {
+      const leechTag = Number(m.leech_count || 0) > 0 ? " | leech" : "";
+      return `<span class=\"mistake-item\">${m.en} = ${m.hu} (hiba: ${m.wrong}/${m.attempts}${leechTag})</span>`;
+    }).join("");
+    mistakesBox.innerHTML = `<strong>Hibafuzet:</strong><div class=\"mistake-list\">${rows}</div>`;
   }
-
-  const rows = data.mistakes
-    .map((m) => `<span class="mistake-item">${m.en} = ${m.hu} (hiba: ${m.wrong}/${m.attempts})</span>`)
-    .join("");
-
-  mistakesBox.innerHTML = `<strong>Hibafuzet:</strong><div class="mistake-list">${rows}</div>`;
 }
 
 async function loadWords() {
@@ -162,40 +242,50 @@ async function loadWords() {
   state.cards = data.words;
   applyFilters();
   setCount();
-  resetAllGames();
 }
 
 async function loadAll() {
   setStatus("Adatok betoltese...");
   try {
-    await loadDashboard();
     await loadWords();
-    await loadMistakes();
+    await refreshMeta();
+    resetAllGames();
     setStatus("Rendszer kesz.");
   } catch (err) {
     setStatus(err.message, true);
   }
 }
 
-function switchMode(mode) {
-  state.mode = mode;
-  tabs.forEach((t) => t.classList.toggle("active", t.dataset.mode === mode));
-  panels.forEach((p) => p.classList.toggle("active", p.id === mode));
-  renderMode();
+function speak(text) {
+  if (!window.speechSynthesis || !text) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = state.direction === "en-hu" ? "en-US" : "hu-HU";
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(u);
 }
 
-function getStudyBase() {
-  return state.filteredCards;
+function buildSentence(card) {
+  const word = state.direction === "en-hu" ? card.en : card.hu;
+  const answer = state.direction === "en-hu" ? card.hu : card.en;
+  const templates = [
+    `I need this term in work: ${word}.`,
+    `Can you explain: ${word}?`,
+    `Today I practiced this word: ${word}.`
+  ];
+  return {
+    prompt: templates[Math.floor(Math.random() * templates.length)],
+    answer: `Forditas: ${answer}`
+  };
 }
 
 function buildStudyOrder(limit) {
-  const base = getStudyBase();
-  if (!base.length) return [];
+  if (!state.filteredCards.length) return [];
 
   const weighted = [];
-  base.forEach((card) => {
+  state.filteredCards.forEach((card) => {
     const wrong = Number(card.wrong || 0);
-    const weight = 1 + Math.min(4, wrong);
+    const leech = Number(card.leech_count || 0);
+    const weight = 1 + Math.min(5, wrong + leech * 2);
     for (let i = 0; i < weight; i += 1) weighted.push(card);
   });
 
@@ -207,15 +297,26 @@ function insertRetry(order, currentIndex, card) {
   order.splice(pos, 0, card);
 }
 
-async function sendReview(wordId, correct) {
+async function sendReview(card, quality) {
   await api("/api/review", {
     method: "POST",
-    body: JSON.stringify({ wordId, correct })
+    body: JSON.stringify({ wordId: card.id, quality })
   });
+  updateCardLocally(card, quality);
+  applyFilters();
+  setCount();
+  await refreshMeta();
+}
+
+function switchMode(mode) {
+  state.mode = mode;
+  tabs.forEach((t) => t.classList.toggle("active", t.dataset.mode === mode));
+  panels.forEach((p) => p.classList.toggle("active", p.id === mode));
+  renderMode();
 }
 
 function initFlashcards() {
-  state.flash.order = shuffle(getStudyBase());
+  state.flash.order = shuffle(state.filteredCards);
   state.flash.index = 0;
   state.flash.revealed = false;
 }
@@ -227,21 +328,25 @@ function renderFlashcards() {
     return;
   }
 
-  if (!state.flash.order.length || state.flash.index >= state.flash.order.length) {
-    initFlashcards();
-  }
+  if (!state.flash.order.length || state.flash.index >= state.flash.order.length) initFlashcards();
 
   const card = state.flash.order[state.flash.index];
   const front = promptSide(card);
   const back = answerSide(card);
+  const sentence = buildSentence(card);
 
   root.innerHTML = `
     <div class="card-box">${state.flash.revealed ? back : front}</div>
     <div class="row">
       <button id="flipBtn">${state.flash.revealed ? "Elrejt" : "Mutat"}</button>
+      <button id="speakBtn" class="ghost">Kiejtes</button>
       <button id="knownBtn">Tudtam</button>
-      <button id="forgotBtn" class="secondary">Elrontottam</button>
+      <button id="forgotBtn" class="secondary">Nehez volt</button>
       <button id="nextBtn" class="ghost">Kovetkezo</button>
+    </div>
+    <div class="sentence-box">
+      <strong>Peldamondat:</strong> ${sentence.prompt}
+      <div class="row"><button id="showSentenceAnswer" class="ghost">Forditas mutatasa</button><span id="sentenceAnswer"></span></div>
     </div>
     <p>${state.flash.index + 1}/${state.flash.order.length}</p>
   `;
@@ -251,11 +356,15 @@ function renderFlashcards() {
     renderFlashcards();
   };
 
+  document.getElementById("speakBtn").onclick = () => speak(front);
+
+  document.getElementById("showSentenceAnswer").onclick = () => {
+    document.getElementById("sentenceAnswer").textContent = sentence.answer;
+  };
+
   document.getElementById("knownBtn").onclick = async () => {
     try {
-      await sendReview(card.id, true);
-      await loadDashboard();
-      await loadMistakes();
+      await sendReview(card, 4);
       state.flash.index += 1;
       state.flash.revealed = false;
       renderFlashcards();
@@ -266,9 +375,7 @@ function renderFlashcards() {
 
   document.getElementById("forgotBtn").onclick = async () => {
     try {
-      await sendReview(card.id, false);
-      await loadDashboard();
-      await loadMistakes();
+      await sendReview(card, 1);
       insertRetry(state.flash.order, state.flash.index, card);
       state.flash.index += 1;
       state.flash.revealed = false;
@@ -297,20 +404,12 @@ function renderTyping() {
     root.innerHTML = "<p>Nincs szo az aktiv szurovel.</p>";
     return;
   }
-
   if (!state.typing.order.length) initTyping();
 
   const done = state.typing.index >= state.typing.order.length;
   if (done) {
-    root.innerHTML = `
-      <h2>Kesz</h2>
-      <p class="score">Pontszam: ${state.typing.score}/${state.typing.order.length}</p>
-      <button id="restartTyping">Uj kor</button>
-    `;
-    document.getElementById("restartTyping").onclick = () => {
-      initTyping();
-      renderTyping();
-    };
+    root.innerHTML = `<h2>Kesz</h2><p>Pontszam: ${state.typing.score}/${state.typing.order.length}</p><button id="restartTyping">Uj kor</button>`;
+    document.getElementById("restartTyping").onclick = () => { initTyping(); renderTyping(); };
     return;
   }
 
@@ -321,6 +420,7 @@ function renderTyping() {
     <div class="row">
       <button id="checkTyping">Ellenorzes</button>
       <button id="skipTyping" class="ghost">Passz</button>
+      <button id="speakTyping" class="ghost">Kiejtes</button>
     </div>
     <div class="feedback" id="typingFeedback"></div>
     <p>${state.typing.index + 1}/${state.typing.order.length}</p>
@@ -331,25 +431,24 @@ function renderTyping() {
 
   const submit = async () => {
     const val = input.value.trim();
-    const correctValue = answerSide(card);
-    const good = answerEquals(val, correctValue);
+    const correctText = answerSide(card);
+    const good = answerEquals(val, correctText);
     const feedback = document.getElementById("typingFeedback");
 
     try {
-      await sendReview(card.id, good);
-      await loadDashboard();
-      await loadMistakes();
+      await sendReview(card, good ? 4 : 1);
       if (good) {
-        feedback.textContent = "Helyes.";
+        feedback.textContent = "Helyes";
         feedback.className = "feedback ok";
         state.typing.score += 1;
       } else {
-        feedback.textContent = `Nem jo. Helyes: ${correctValue}`;
+        feedback.textContent = `Nem jo. Helyes: ${correctText}`;
         feedback.className = "feedback bad";
         insertRetry(state.typing.order, state.typing.index, card);
       }
+
       state.typing.index += 1;
-      setTimeout(renderTyping, 650);
+      setTimeout(renderTyping, 500);
     } catch (err) {
       setStatus(err.message, true);
     }
@@ -358,9 +457,7 @@ function renderTyping() {
   document.getElementById("checkTyping").onclick = submit;
   document.getElementById("skipTyping").onclick = async () => {
     try {
-      await sendReview(card.id, false);
-      await loadDashboard();
-      await loadMistakes();
+      await sendReview(card, 0);
       insertRetry(state.typing.order, state.typing.index, card);
       state.typing.index += 1;
       renderTyping();
@@ -368,6 +465,8 @@ function renderTyping() {
       setStatus(err.message, true);
     }
   };
+
+  document.getElementById("speakTyping").onclick = () => speak(promptSide(card));
 
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") submit();
@@ -382,7 +481,7 @@ function initChoice() {
 
 function buildChoiceOptions(card) {
   const correct = answerSide(card);
-  const pool = [...new Set(getStudyBase().map((c) => answerSide(c)).filter((a) => a !== correct))];
+  const pool = [...new Set(state.filteredCards.map((c) => answerSide(c)).filter((a) => a !== correct))];
   const wrong = shuffle(pool).slice(0, Math.min(3, pool.length));
   return shuffle([...wrong, correct]);
 }
@@ -393,20 +492,12 @@ function renderChoice() {
     root.innerHTML = "<p>Nincs szo az aktiv szurovel.</p>";
     return;
   }
-
   if (!state.choice.order.length) initChoice();
 
   const done = state.choice.index >= state.choice.order.length;
   if (done) {
-    root.innerHTML = `
-      <h2>Kesz</h2>
-      <p class="score">Pontszam: ${state.choice.score}/${state.choice.order.length}</p>
-      <button id="restartChoice">Uj kor</button>
-    `;
-    document.getElementById("restartChoice").onclick = () => {
-      initChoice();
-      renderChoice();
-    };
+    root.innerHTML = `<h2>Kesz</h2><p>Pontszam: ${state.choice.score}/${state.choice.order.length}</p><button id="restartChoice">Uj kor</button>`;
+    document.getElementById("restartChoice").onclick = () => { initChoice(); renderChoice(); };
     return;
   }
 
@@ -431,11 +522,9 @@ function renderChoice() {
     btn.onclick = async () => {
       const good = opt === correct;
       try {
-        await sendReview(card.id, good);
-        await loadDashboard();
-        await loadMistakes();
+        await sendReview(card, good ? 4 : 1);
         if (good) {
-          feedback.textContent = "Helyes.";
+          feedback.textContent = "Helyes";
           feedback.className = "feedback ok";
           state.choice.score += 1;
         } else {
@@ -444,7 +533,7 @@ function renderChoice() {
           insertRetry(state.choice.order, state.choice.index, card);
         }
         state.choice.index += 1;
-        setTimeout(renderChoice, 650);
+        setTimeout(renderChoice, 500);
       } catch (err) {
         setStatus(err.message, true);
       }
@@ -454,7 +543,7 @@ function renderChoice() {
 }
 
 function initMatching() {
-  const picks = shuffle(getStudyBase()).slice(0, Math.min(8, getStudyBase().length));
+  const picks = shuffle(state.filteredCards).slice(0, Math.min(8, state.filteredCards.length));
   const left = picks.map((c) => promptSide(c));
   const right = shuffle(picks.map((c) => answerSide(c)));
   const map = {};
@@ -477,35 +566,22 @@ function initMatching() {
 function renderMatching() {
   const root = document.getElementById("matching");
   if (state.filteredCards.length < 4) {
-    root.innerHTML = "<p>Parositashoz legalabb 4 szo kell az aktiv szurovel.</p>";
+    root.innerHTML = "<p>Parositashoz legalabb 4 szo kell.</p>";
     return;
   }
 
   if (!state.matching.left.length && !state.matching.right.length) initMatching();
 
   if (!state.matching.left.length) {
-    root.innerHTML = `
-      <h2>Kesz</h2>
-      <p class="score">Pontszam: ${state.matching.score}</p>
-      <button id="restartMatching">Uj kor</button>
-    `;
-    document.getElementById("restartMatching").onclick = () => {
-      initMatching();
-      renderMatching();
-    };
+    root.innerHTML = `<h2>Kesz</h2><p>Pontszam: ${state.matching.score}</p><button id="restartMatching">Uj kor</button>`;
+    document.getElementById("restartMatching").onclick = () => { initMatching(); renderMatching(); };
     return;
   }
 
   root.innerHTML = `
     <div class="grid-2">
-      <div class="list-box">
-        <h3>Kerdesek</h3>
-        <div id="leftList"></div>
-      </div>
-      <div class="list-box">
-        <h3>Forditasok</h3>
-        <div id="rightList"></div>
-      </div>
+      <div class="list-box"><h3>Kerdesek</h3><div id="leftList"></div></div>
+      <div class="list-box"><h3>Forditasok</h3><div id="rightList"></div></div>
     </div>
     <div class="feedback" id="matchFeedback"></div>
     <p>Talalatok: ${state.matching.score}</p>
@@ -519,11 +595,8 @@ function renderMatching() {
     const btn = document.createElement("button");
     btn.className = "list-item ghost";
     btn.textContent = item;
-    if (state.matching.chosenLeft === item) btn.style.outline = "2px solid #1b8d74";
-    btn.onclick = () => {
-      state.matching.chosenLeft = item;
-      renderMatching();
-    };
+    if (state.matching.chosenLeft === item) btn.style.outline = "2px solid #1f947f";
+    btn.onclick = () => { state.matching.chosenLeft = item; renderMatching(); };
     leftList.appendChild(btn);
   });
 
@@ -533,29 +606,25 @@ function renderMatching() {
     btn.textContent = item;
     btn.onclick = async () => {
       if (!state.matching.chosenLeft) {
-        fb.textContent = "Eloszor valassz bal oldalt.";
+        fb.textContent = "Valassz bal oldalt";
         fb.className = "feedback bad";
         return;
       }
 
       const selectedCard = state.matching.cardByPrompt[state.matching.chosenLeft];
       const good = state.matching.map[state.matching.chosenLeft] === item;
-
       try {
-        await sendReview(selectedCard.id, good);
-        await loadDashboard();
-        await loadMistakes();
+        await sendReview(selectedCard, good ? 4 : 1);
         if (good) {
-          fb.textContent = "Jo paros.";
+          fb.textContent = "Jo par";
           fb.className = "feedback ok";
           state.matching.score += 1;
           state.matching.left = state.matching.left.filter((x) => x !== state.matching.chosenLeft);
           state.matching.right = state.matching.right.filter((x) => x !== item);
         } else {
-          fb.textContent = "Nem jo paros.";
+          fb.textContent = "Nem jo par";
           fb.className = "feedback bad";
         }
-
         state.matching.chosenLeft = null;
         setTimeout(renderMatching, 350);
       } catch (err) {
@@ -566,11 +635,66 @@ function renderMatching() {
   });
 }
 
+function initSrs() {
+  const due = state.filteredCards.filter(isDueCard);
+  state.srs.order = due.length ? shuffle(due).slice(0, Math.min(25, due.length)) : buildStudyOrder(25);
+  state.srs.index = 0;
+}
+
+function renderSrs() {
+  const root = document.getElementById("srs");
+  if (!state.filteredCards.length) {
+    root.innerHTML = "<p>Nincs szo az aktiv szurovel.</p>";
+    return;
+  }
+
+  if (!state.srs.order.length) initSrs();
+
+  if (!state.srs.order.length) {
+    root.innerHTML = "<p>Nincs SRS kerdes.</p>";
+    return;
+  }
+
+  if (state.srs.index >= state.srs.order.length) {
+    root.innerHTML = `<h2>Kesz</h2><button id=\"restartSrs\">Uj SRS kor</button>`;
+    document.getElementById("restartSrs").onclick = () => { initSrs(); renderSrs(); };
+    return;
+  }
+
+  const card = state.srs.order[state.srs.index];
+  root.innerHTML = `
+    <div class="prompt">${promptSide(card)}</div>
+    <div class="card-box">${answerSide(card)}</div>
+    <p>Ertekeld mennyire ment:</p>
+    <div class="quality-wrap" id="qualityWrap"></div>
+    <p>${state.srs.index + 1}/${state.srs.order.length}</p>
+  `;
+
+  const wrap = document.getElementById("qualityWrap");
+  qualityLabels.forEach((label, idx) => {
+    const b = document.createElement("button");
+    b.className = "quality-btn ghost";
+    b.textContent = label;
+    b.onclick = async () => {
+      try {
+        await sendReview(card, idx);
+        if (idx < 3) insertRetry(state.srs.order, state.srs.index, card);
+        state.srs.index += 1;
+        renderSrs();
+      } catch (err) {
+        setStatus(err.message, true);
+      }
+    };
+    wrap.appendChild(b);
+  });
+}
+
 function renderMode() {
   if (state.mode === "flashcards") renderFlashcards();
   if (state.mode === "typing") renderTyping();
   if (state.mode === "choice") renderChoice();
   if (state.mode === "matching") renderMatching();
+  if (state.mode === "srs") renderSrs();
 }
 
 function resetAllGames() {
@@ -578,6 +702,7 @@ function resetAllGames() {
   initTyping();
   initChoice();
   initMatching();
+  initSrs();
   renderMode();
 }
 
@@ -604,15 +729,18 @@ dueOnlyEl.addEventListener("change", () => {
   resetAllGames();
 });
 
-reloadBtn.addEventListener("click", async () => {
-  await loadAll();
+themeToggleBtn.addEventListener("click", () => {
+  const current = document.body.getAttribute("data-theme") || "light";
+  setTheme(current === "dark" ? "light" : "dark");
 });
+
+reloadBtn.addEventListener("click", loadAll);
 
 uploadCsvBtn.addEventListener("click", async () => {
   try {
     const file = csvFileInput.files && csvFileInput.files[0];
     if (!file) {
-      setStatus("Valassz ki egy CSV fajlt.", true);
+      setStatus("Valassz CSV fajlt.", true);
       return;
     }
 
@@ -622,7 +750,7 @@ uploadCsvBtn.addEventListener("click", async () => {
       body: JSON.stringify({ csvText: text })
     });
 
-    setStatus(`CSV import kesz. Feldolgozott: ${result.parsed}, uj: ${result.inserted}.`);
+    setStatus(`Import kesz. Feldolgozott: ${result.parsed}, uj: ${result.inserted}.`);
     await loadAll();
   } catch (err) {
     setStatus(err.message, true);
@@ -657,4 +785,5 @@ resetStatsBtn.addEventListener("click", async () => {
   }
 });
 
+initTheme();
 loadAll();
